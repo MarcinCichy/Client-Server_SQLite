@@ -28,9 +28,9 @@ def get_db_adapter():
     if not parser.has_section('database'):
         raise Exception("No [database] section found in database.ini file")
 
-    engine = parser.get('database', 'engine', fallback='postgres')
+    engine = parser.get('database', 'engine', fallback='postgresql')
 
-    if engine == 'postgres':
+    if engine == 'postgresql':
         # Odczyt parametrów z sekcji [postgresql]
         params = db_config(section='postgresql')
         from server_package.db_adapter_postgres import PostgresDBAdapter
