@@ -2,26 +2,15 @@ import os
 from configparser import ConfigParser
 
 
-def db_config(filename='database.ini', section='postgresql'):
-    parser = ConfigParser()
-    parser.read(filename)
-
-    db = {}
-    if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            db[param[0]] = param[1]
-    else:
-        raise Exception(f'Section {section} not found in the {filename} file')
-
-    return db
-
-
 def get_db_adapter():
     """
-    Zwraca instancję adpatera bazy danych w zależności od wartości klucza 'engine w sekcji [datbase].
+    Zwraca instancję adpatera bazy danych w zależności od wartości klucza 'engine w sekcji [datbase] pliku 'database.ini'.
 
+    Obsługiwane wartoci:
+    - engine=postgresql - odczytuje parametry z sekcji [postgresql] i tworzy PostgresDBAdapter
+    - engine=sqlite - odczytuje parametry z sekcji [sqlite] i tworzy SQLiteDBAdapter
     """
+
     parser =ConfigParser()
     parser.read('database.ini')
 
@@ -30,21 +19,40 @@ def get_db_adapter():
 
     engine = parser.get('database', 'engine', fallback='postgresql')
 
+    # --------------------------
+    #  Obsługa PostgreSQL
+    # --------------------------
     if engine == 'postgresql':
+        if not parser.has_section('postgresql'):
+            raise Exception("No [postgresql] section found in database.ini file")
         # Odczyt parametrów z sekcji [postgresql]
-        params = db_config(section='postgresql')
-        from server_package.db_adapter_postgres import PostgresDBAdapter
+        host=parser.get('postgresql', 'host')
+        port=parser.get('postgresql', 'port')
+        dbname=parser.get('postgresql', 'dbname')
+        user=parser.get('postgresql', 'user')
+        password=parser.gat('postgresql', 'password')
+
+        from server_package.db_adpater_postgres import PostgresDBAdapter
         return PostgresDBAdapter(
-            host=params['host'],
-            port=params['port'],
-            dbname=params['dbname'],
-            user=params['user'],
-            password=params['password']
+            host=host,
+            port=port,
+            dbname=dbname,
+            user=user,
+            password=password
         )
+    # --------------------------
+    #  Obsługa SQLite
+    # --------------------------
     elif engine == 'sqlite':
+        if not parser.has_section('sqlite'):
+            raise Exception("No [sqlite] section found in database.ini file")
         # Odczyt parametrów z sekcji [sqlite]
-        params = db_config(section='sqlite')
+        db_path = parser.get('sqlite', 'db_path')
+
         from server_package.db_adapter_sqlite import SQLiteDBAdapter
-        return SQLiteDBAdapter(db_path=params['db_path'])
+        return SQLiteDBAdapter(db_path=db_path)
+    # --------------------------
+    #  Obsługa nieznanego silnika
+    # --------------------------
     else:
         raise ValueError(f"Unsupported engine: {engine}")
