@@ -11,7 +11,7 @@ def get_db_adapter():
     - engine=sqlite - odczytuje parametry z sekcji [sqlite] i tworzy SQLiteDBAdapter
     """
 
-    parser =ConfigParser()
+    parser = ConfigParser()
     parser.read('database.ini')
 
     if not parser.has_section('database'):
@@ -26,11 +26,11 @@ def get_db_adapter():
         if not parser.has_section('postgresql'):
             raise Exception("No [postgresql] section found in database.ini file")
         # Odczyt parametrów z sekcji [postgresql]
-        host=parser.get('postgresql', 'host')
-        port=parser.get('postgresql', 'port')
-        dbname=parser.get('postgresql', 'dbname')
-        user=parser.get('postgresql', 'user')
-        password=parser.gat('postgresql', 'password')
+        host = parser.get('postgresql', 'host')
+        port = parser.get('postgresql', 'port')
+        dbname = parser.get('postgresql', 'dbname')
+        user = parser.get('postgresql', 'user')
+        password = parser.get('postgresql', 'password')
 
         from server_package.db_adapter_postgres import PostgresDBAdapter
         return PostgresDBAdapter(

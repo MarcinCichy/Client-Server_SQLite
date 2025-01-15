@@ -5,7 +5,7 @@ from server_package.db_adapter_interface import DatabaseAdapter
 class SQLiteDBAdapter(DatabaseAdapter):
     def __init__(self, db_path):
         """
-        db_path -> ścieążka dostęu do bazy SQLite, np. "my_database.db
+        db_path -> ścieżka dostępu do bazy SQLite, np. "my_database.db
         """
         self.db_path = db_path
         self.connection = None

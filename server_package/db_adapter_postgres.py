@@ -33,7 +33,7 @@ class PostgresDBAdapter(DatabaseAdapter):
         """
 
         self.connect()
-        with self.connection.cursoe() as cur:
+        with self.connection.cursor() as cur:
             cur.execute(query, params)
             self.connection.commmit()
 
@@ -52,7 +52,7 @@ class PostgresDBAdapter(DatabaseAdapter):
         Zwraca listę rekordów z SELECT-a.
         """
         self. connect()
-        with self.connection.cursor(cursor_fsctory=psycopg2.extras.DictCursor) as cur:
+        with self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute(query, params)
             rows = cur.fetchall()
             return [dict(row) for row in rows] if rows else []

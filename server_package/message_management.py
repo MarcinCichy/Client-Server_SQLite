@@ -32,9 +32,10 @@ class MessageManagement:
             return server_response.E_INVALID_DATA
 
         all_inbox_msgs = self.database_support.show_all_messages_inbox(username)
+        print(f"ALL INBOX MSGS = {all_inbox_msgs}")
         msg_list_dict = {}
         for index, (message_id, sender, date) in enumerate(all_inbox_msgs, start=1):
-            formatted_date = date.strftime('%Y-%m-%d')
+            formatted_date = date if isinstance(date, str) else date.strftime('%Y-%m-%d')
             msg_list_dict[index] = {'message_id': message_id, 'sender': sender, 'date': formatted_date}
         print(f'MSG_LIST = { {"msg": msg_list_dict}}')
         return {"msg": msg_list_dict}
