@@ -32,7 +32,7 @@ def get_db_adapter():
         user=parser.get('postgresql', 'user')
         password=parser.gat('postgresql', 'password')
 
-        from server_package.db_adpater_postgres import PostgresDBAdapter
+        from server_package.db_adapter_postgres import PostgresDBAdapter
         return PostgresDBAdapter(
             host=host,
             port=port,
