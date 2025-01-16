@@ -45,7 +45,9 @@ class PostgresDBAdapter(DatabaseAdapter):
         with self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute(query, params)
             result = cur.fetchone()
-            return dict(result) if result else None
+            print(f"RESULT = {result}")
+            # return dict(result) if result else None
+            return result if result else None
 
     def fetch_all(self, query, params=None):
         """
@@ -55,5 +57,7 @@ class PostgresDBAdapter(DatabaseAdapter):
         with self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute(query, params)
             rows = cur.fetchall()
-            return [dict(row) for row in rows] if rows else []
+            print(f'RESULT = {rows}')
+            # return [dict(row) for row in rows] if rows else []
+            return rows if rows else []
 

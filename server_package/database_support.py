@@ -146,7 +146,6 @@ class DatabaseSupport:
         query = "SELECT * FROM messages WHERE message_id = %s"
         row = self.adapter.fetch_one(query, (msg_id,))
         if row and isinstance(row, dict):
-            print(f'RESULT = {row}')
             return row
         elif row:
             # Tu ewentualnie zamiana tuple -> dict

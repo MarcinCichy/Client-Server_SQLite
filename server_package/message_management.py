@@ -32,12 +32,10 @@ class MessageManagement:
             return server_response.E_INVALID_DATA
 
         all_inbox_msgs = self.database_support.show_all_messages_inbox(username)
-        print(f"ALL INBOX MSGS = {all_inbox_msgs}")
         msg_list_dict = {}
-        for index, (message_id, sender, date) in enumerate(all_inbox_msgs, start=1):
+        for index, (message_id, sender_id, date) in enumerate(all_inbox_msgs, start=1):
             formatted_date = date if isinstance(date, str) else date.strftime('%Y-%m-%d')
-            msg_list_dict[index] = {'message_id': message_id, 'sender': sender, 'date': formatted_date}
-        print(f'MSG_LIST = { {"msg": msg_list_dict}}')
+            msg_list_dict[index] = {'message_id': message_id, 'sender': sender_id, 'date': formatted_date}
         return {"msg": msg_list_dict}
 
     def msg_del(self, data):
@@ -56,8 +54,9 @@ class MessageManagement:
         msg_id_to_show = self.choose_which_message(data)
         if isinstance(msg_id_to_show, int):
             message_to_show = self.database_support.show_selected_message(msg_id_to_show)
+
             message_to_show['date'] = self.convert_datetime_datetime_to_string_date(message_to_show['date'])
-            return {"Message to show": message_to_show}
+            return {"Message to show": dict(message_to_show)}
         else:
             return msg_id_to_show
 
