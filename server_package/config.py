@@ -19,6 +19,7 @@ def get_db_adapter():
 
     engine = parser.get('database', 'engine', fallback='postgresql')
 
+    print(f"ENGINE = {engine}")
     # --------------------------
     #  Obsługa PostgreSQL
     # --------------------------
@@ -47,10 +48,14 @@ def get_db_adapter():
         if not parser.has_section('sqlite'):
             raise Exception("No [sqlite] section found in database.ini file")
         # Odczyt parametrów z sekcji [sqlite]
-        db_path = parser.get('sqlite', 'db_path')
+        db_path_relative = parser.get('sqlite', 'db_path')
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.dirname(current_dir)
+        full_path = os.path.join(base_dir, db_path_relative)
 
         from server_package.db_adapter_sqlite import SQLiteDBAdapter
-        return SQLiteDBAdapter(db_path=db_path)
+        print(f"FULL_PATH = {full_path}")
+        return SQLiteDBAdapter(db_path=full_path)
     # --------------------------
     #  Obsługa nieznanego silnika
     # --------------------------

@@ -13,6 +13,7 @@ class SQLiteDBAdapter(DatabaseAdapter):
     def connect(self):
         if not self.connection:
             self.connection = sqlite3.connect(self.db_path)
+            self.connection.row_factory = sqlite3.Row
 
     def disconnect(self):
         if self.connection:
@@ -23,11 +24,13 @@ class SQLiteDBAdapter(DatabaseAdapter):
         self.connect()
         with self.connection:
             cursor = self.connection.cursor()
+            query = query.replace('%s', '?')
             cursor.execute(query, params or [])
 
     def fetch_one(self, query, params=None):
         self.connect()
         cursor = self.connection.cursor()
+        query = query.replace('%s', '?')
         cursor.execute(query, params or [])
         row = cursor.fetchone()
         if row:
@@ -37,6 +40,7 @@ class SQLiteDBAdapter(DatabaseAdapter):
     def fetch_all(self, query, params=None):
         self.connect()
         cursor = self.connection.cursor()
+        query = query.replace('%s', '?')
         cursor.execute(query, params or [])
         rows = cursor.fetchall()
         return rows if rows else []

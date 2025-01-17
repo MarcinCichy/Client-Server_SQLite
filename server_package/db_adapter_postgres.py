@@ -35,7 +35,7 @@ class PostgresDBAdapter(DatabaseAdapter):
         self.connect()
         with self.connection.cursor() as cur:
             cur.execute(query, params)
-            self.connection.commmit()
+            self.connection.commit()
 
     def fetch_one(self, query, params=None):
         """
