@@ -19,14 +19,6 @@ class DatabaseSupport:
     def __init__(self):
         self.adapter = get_db_adapter()
 
-    # @handle_database_errors
-    # def data_update(self, table, column, user_name, new_value=None):
-    #     query = sql.SQL("UPDATE {table} SET {column} = %s WHERE user_name = %s").format(
-    #         table=sql.Identifier(table),
-    #         column=sql.Identifier(column)
-    #     )
-    #     self.adapter.execute_query(query.as_string(self.adapter.connection), (new_value, user_name))
-
     @handle_database_errors
     def data_update(self, table, column, user_name, new_value=None):
         # Jeśli adapter to SQLite, budujemy zapytanie przy użyciu f-stringa i placeholderów '?'.
@@ -135,20 +127,6 @@ class DatabaseSupport:
     def add_new_message_to_db(self, new_data):
         query = "INSERT INTO messages (sender_id, date, recipient_id, content) VALUES (%s, %s, %s, %s)"
         self.adapter.execute_query(query, new_data)
-
-    # @handle_database_errors
-    # def password_update(self, table, column1, column2, user_id, new_value1=None, new_value2=None):
-    #     query1 = sql.SQL("UPDATE {table} SET {column} = %s WHERE user_id = %s").format(
-    #         table=sql.Identifier(table),
-    #         column=sql.Identifier(column1)
-    #     )
-    #     self.adapter.execute_query(query1.as_string(self.adapter.connection), (new_value1, user_id))
-    #
-    #     query2 = sql.SQL("UPDATE {table} SET {column} = %s WHERE user_id = %s").format(
-    #         table=sql.Identifier(table),
-    #         column=sql.Identifier(column2)
-    #     )
-    #     self.adapter.execute_query(query2.as_string(self.adapter.connection), (new_value2, user_id))
 
     @handle_database_errors
     def password_update(self, table, column1, column2, user_id, new_value1=None, new_value2=None):
