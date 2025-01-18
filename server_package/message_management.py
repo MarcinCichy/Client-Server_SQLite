@@ -27,15 +27,30 @@ class MessageManagement:
             self.database_support.add_new_message_to_db(new_user_data)
             return server_response.MESSAGE_WAS_SENT
 
-    def msg_list(self, username):  # to show all messages in box in middle window show all msgs in box
+    def msg_list(self, username):
         if not username:
             return server_response.E_INVALID_DATA
 
         all_inbox_msgs = self.database_support.show_all_messages_inbox(username)
+        # all_inbox_msgs -> lista słowników
+
         msg_list_dict = {}
-        for index, (message_id, sender_id, date) in enumerate(all_inbox_msgs, start=1):
-            formatted_date = date if isinstance(date, str) else date.strftime('%Y-%m-%d')
-            msg_list_dict[index] = {'message_id': message_id, 'sender': sender_id, 'date': formatted_date}
+        for index, row in enumerate(all_inbox_msgs, start=1):
+            message_id = row["message_id"]
+            sender_id = row["sender_id"]
+            date_value = row["date"]
+
+            # sprawdzamy czy obiekt date czy str
+            if hasattr(date_value, "strftime"):
+                formatted_date = date_value.strftime('%Y-%m-%d')
+            else:
+                formatted_date = date_value  # zakładamy 'YYYY-MM-DD' lub None
+
+            msg_list_dict[index] = {
+                'message_id': message_id,
+                'sender': sender_id,
+                'date': formatted_date
+            }
         return {"msg": msg_list_dict}
 
     def msg_del(self, data):
@@ -48,15 +63,20 @@ class MessageManagement:
         else:
             return msg_id_to_del
 
-    def msg_show(self, data):   # to show selected message
+    def msg_show(self, data):
         if not data:
             return server_response.E_INVALID_DATA
         msg_id_to_show = self.choose_which_message(data)
         if isinstance(msg_id_to_show, int):
             message_to_show = self.database_support.show_selected_message(msg_id_to_show)
+            if not message_to_show:
+                return server_response.E_MESSAGE_NOT_FOUND
 
-            message_to_show['date'] = self.convert_datetime_datetime_to_string_date(message_to_show['date'])
-            return {"Message to show": dict(message_to_show)}
+            date_value = message_to_show["date"]
+            if hasattr(date_value, "strftime"):
+                message_to_show["date"] = date_value.strftime('%Y-%m-%d')
+
+            return {"Message to show": message_to_show}
         else:
             return msg_id_to_show
 
@@ -72,19 +92,18 @@ class MessageManagement:
     def convert_datetime_datetime_to_string_date(self, datetime_from_db):
         if not datetime_from_db:
             return None
+        if hasattr(datetime_from_db, "strftime"):
+            return datetime_from_db.strftime('%Y-%m-%d')
         else:
-            converted_datetime = datetime_from_db.strftime('%Y-%m-%d')
-            return converted_datetime
+            # zakładamy, że to string
+            return datetime_from_db
 
     def choose_which_message(self, data):
         username = list(data.keys())[0]
         msg_list_dict = self.msg_list(username)["msg"]
-        print(f'msg_list_dict = {msg_list_dict}')
         msg_num = list(data.values())[0]
-        print(f'msg_num = {msg_num}')
         if msg_num is None or int(msg_num) not in msg_list_dict.keys():
             return server_response.E_MESSAGE_NOT_FOUND
         else:
             chosen_msg = msg_list_dict[int(msg_num)]["message_id"]
-            print(f'chosen_id = {chosen_msg}')
             return chosen_msg

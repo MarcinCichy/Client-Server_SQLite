@@ -48,10 +48,10 @@ class CommandHandler:
         if isinstance(entrance_command, dict):
             # Extract the first key, which is the username submitted
             username = next(iter(entrance_command))
-            print(f'prep_com_username = {username}')
+            # print(f'prep_com_username = {username}')
             # Based on this username, create a new dictionary with the command
             new_command = entrance_command.pop(username)
-            print(f'new_command = {new_command}')
+            # print(f'new_command = {new_command}')
             return new_command, username
 
     def use_command(self, entrance_command, permissions):
@@ -103,9 +103,9 @@ class CommandHandler:
             result = server_response.UNRECOGNISED_COMMAND
 
         # print(f'Server response: {result}')
-        print(f'EXIT USERNAME = {self.username}')
-        print(f'EXIT PERMISSIONS: {self.permissions}')
-        print(f'EXIT DATA = {data}')
+        # print(f'EXIT USERNAME = {self.username}')
+        # print(f'EXIT PERMISSIONS: {self.permissions}')
+        # print(f'EXIT DATA = {data}')
 
         return result
 

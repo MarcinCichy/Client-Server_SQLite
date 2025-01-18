@@ -25,7 +25,7 @@ class Server:
                 with conn:
                     print(f"Connected by {addr}")
                     received_data = conn.recv(self.srv_buff)
-                    print(f'Server USER DATA = {received_data}')
+                    # print(f'Server USER DATA = {received_data}')
 
                     command = self.json_decode_received_data(received_data)
                     username = self.get_username_from_received_data(command)
@@ -48,12 +48,12 @@ class Server:
         return user_data_db
 
     def handle_connection(self, command, user_data_db):
-        print(f'USER_DATA_DB = {user_data_db}')
+        # print(f'USER_DATA_DB = {user_data_db}')
         if user_data_db is not None:
             permissions = user_data_db.get('permissions')
         else:
             permissions = None
-        print(f'PERMISSIONS = {permissions}')
+        # print(f'PERMISSIONS = {permissions}')
         result = self.json_serialize_response(self.handler.use_command(command, permissions))
         return result
 
@@ -61,7 +61,7 @@ class Server:
     def json_decode_received_data(received_data):
         decoded_data = json.loads(received_data)
         if 'login' in decoded_data['command']:
-            print(f"Command received from Client: login")
+            # print(f"Command received from Client: login")
             return decoded_data["command"]
         else:
             print(f"Command received from Client: {decoded_data['command']}")

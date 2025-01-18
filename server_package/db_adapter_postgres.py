@@ -29,35 +29,29 @@ class PostgresDBAdapter(DatabaseAdapter):
 
     def execute_query(self, query, params=None):
         """
-        Do zapytań bez zwracania wyników, np. INSER, UPDATE, DELETE.
+        Do zapytań bez zwracania wyników, np. INSERT, UPDATE, DELETE.
         """
-
         self.connect()
         with self.connection.cursor() as cur:
             cur.execute(query, params)
-            self.connection.commit()
+        self.connection.commit()
 
     def fetch_one(self, query, params=None):
         """
-        Zwraca jeden record z SELECT-a.
+        Zwraca słownik reprezentujący pojedynczy wiersz (lub None).
         """
         self.connect()
         with self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute(query, params)
-            result = cur.fetchone()
-            print(f"RESULT = {result}")
-            # return dict(result) if result else None
-            return result if result else None
+            row = cur.fetchone()
+            return dict(row) if row else None
 
     def fetch_all(self, query, params=None):
         """
-        Zwraca listę rekordów z SELECT-a.
+        Zwraca listę słowników (lub pustą listę).
         """
-        self. connect()
+        self.connect()
         with self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute(query, params)
             rows = cur.fetchall()
-            print(f'RESULT = {rows}')
-            # return [dict(row) for row in rows] if rows else []
-            return rows if rows else []
-
+            return [dict(r) for r in rows] if rows else []
