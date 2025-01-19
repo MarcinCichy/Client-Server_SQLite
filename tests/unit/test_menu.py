@@ -1,8 +1,10 @@
+import os
 import unittest
 from server_package.menu import CommandHandler
 from server_package.functions import SystemUtilities
 import server_package.server_response as server_response
 
+os.environ['TEST_ENV'] = 'test'
 
 class TestMenu(unittest.TestCase):
     def setUp(self):

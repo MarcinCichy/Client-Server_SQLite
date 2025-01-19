@@ -1,8 +1,10 @@
+import os
 import json
 import unittest
 from server_package.server import Server
 import server_package.server_response as server_response
 
+os.environ['TEST_ENV'] = 'test'
 
 class TestServerInitialization(unittest.TestCase):
     def setUp(self):

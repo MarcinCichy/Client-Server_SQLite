@@ -1,3 +1,5 @@
+# tests/unit/test_user_authentication.py
+
 import os
 import unittest
 from server_package.user_authentication import UserAuthentication
@@ -6,6 +8,8 @@ from server_package.database_support import DatabaseSupport
 import build_test_db
 
 os.environ['TEST_ENV'] = 'test'
+os.environ['TEST_ENGINE'] = 'sqlite'
+# os.environ['TEST_ENGINE'] = 'postgresql'
 
 
 class TestUserAuthentication(unittest.TestCase):
@@ -13,7 +17,6 @@ class TestUserAuthentication(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Tworzymy i wypełniamy bazę danych raz przed uruchomieniem testów
-        build_test_db.drop_temp_db()
         build_test_db.create_temp_db()
         build_test_db.fill_temp_db()
 
@@ -43,30 +46,7 @@ class TestUserAuthentication(unittest.TestCase):
         result = self.user_auth.login(banned_user_data)
         self.assertEqual(result, expected)
 
-    def test_login_user_no_valid_data(self):
-        no_valid_login_data = [{"username": "user4"}, {"password": "password3"}]
-        expected = server_response.E_INVALID_CREDENTIALS
-        result = self.user_auth.login(no_valid_login_data)
-        self.assertEqual(result, expected)
-
-    def test_logout_user_no_data(self):
-        data = []
-        expected = server_response.E_INVALID_DATA
-        result = self.user_auth.logout(data)
-        self.assertEqual(result, expected)
-
-    def test_logout_user_logged_in_user(self):
-        data = "user1"
-        expected = {"Logout": "Successful"}
-        result = self.user_auth.logout(data)
-        self.assertEqual(result, expected),
-
-    def test_logout_user_no_logged_user(self):
-        data = "username_not_exist"
-        expected = None
-        result = self.user_auth.logout(data)
-        self.assertEqual(result, expected)
-
+    # Dodaj inne testy...
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

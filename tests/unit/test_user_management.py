@@ -1,3 +1,5 @@
+# tests/unit/test_user_management.py
+
 import os
 import unittest
 from server_package.user_management import UserManagement
@@ -7,6 +9,8 @@ from server_package.user_authentication import UserAuthentication
 import build_test_db
 
 os.environ['TEST_ENV'] = 'test'
+os.environ['TEST_ENGINE'] = 'sqlite'
+# os.environ['TEST_ENGINE'] = 'postgresql'
 
 
 class TestUserManagement(unittest.TestCase):
@@ -14,7 +18,6 @@ class TestUserManagement(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Tworzymy i wypełniamy bazę danych raz przed uruchomieniem testów
-        build_test_db.drop_temp_db()
         build_test_db.create_temp_db()
         build_test_db.fill_temp_db()
 
@@ -29,9 +32,8 @@ class TestUserManagement(unittest.TestCase):
         self.user_auth = UserAuthentication(self.database_support)
 
     def test_create_account_valid_data(self):
-        self.usr_mgmt.user_del("jakito")
+        self.usr_mgmt.user_del("jakito")  # Usuń użytkownika, jeśli istnieje
         new_account_data = [{'username': 'jakito'}, {'password': 'takion'}, {'permissions': 'user'}, {'status': 'active'}]
-
         result = self.usr_mgmt.create_account(new_account_data)
         self.assertEqual(result, server_response.NEW_ACCOUNT_CREATED)
 
@@ -60,7 +62,7 @@ class TestUserManagement(unittest.TestCase):
     def test_create_account_invalid_permissions_data(self):
         new_username = {'username': "username2"}
         password = {'password': "new_username_password"}
-        permissions = {'permissions': "superuser"}
+        permissions = {'permissions': "superuser"}  # Nieprawidłowe uprawnienia
         status = {'status': "active"}
         activation_date = {'activation_date': '2023-01-01'}
         data = [new_username, password, permissions, status, activation_date]
@@ -79,9 +81,9 @@ class TestUserManagement(unittest.TestCase):
         self.assertEqual(result, server_response.E_USER_DOES_NOT_EXIST)
 
     def test_delete_logged_user(self):
-        user_to_del = "username_logged"
+        user_to_del = "user1"  # Zakładam, że 'user1' jest zalogowany
         result = self.usr_mgmt.user_del(user_to_del)
-        self.assertEqual(result, server_response.E_USER_DOES_NOT_EXIST)
+        self.assertEqual(result, server_response.E_USER_LOGGED_CANNOT_BE_DELETED)
 
     def test_user_info_not_exist_user(self):
         not_exist_user_info = "username2"
@@ -123,8 +125,6 @@ class TestUserManagement(unittest.TestCase):
         result = self.usr_mgmt.user_perm(data)
         self.assertEqual(result, {user_to_change_permission: server_response.USER_PERMISSIONS_CHANGED})
 
-    # the user_stat() method is very similar to the user_perm() method, so no tests are needed.
-
     def test_user_list(self):
         expected_result = {server_response.EXISTING_ACCOUNTS: {
             "user1": {"permissions": "admin", "status": "active"},
@@ -136,6 +136,7 @@ class TestUserManagement(unittest.TestCase):
         result = self.usr_mgmt.user_list()
         self.assertEqual(result, expected_result)
 
+    # Dodaj inne testy...
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -3,24 +3,24 @@ import unittest
 from server_package.message_management import MessageManagement
 import server_package.server_response as server_response
 from server_package.database_support import DatabaseSupport
-from server_package import server_data as server_data
 import build_test_db
 
+# Ustawienie dla testów – np. SQLite
 os.environ['TEST_ENV'] = 'test'
+# os.environ['TEST_ENGINE'] = 'postgresql'
+os.environ['TEST_ENGINE'] = 'sqlite'
 
 
 class TestMessageManagement(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Tworzymy i wypełniamy bazę danych raz przed uruchomieniem testów
         build_test_db.drop_temp_db()
         build_test_db.create_temp_db()
         build_test_db.fill_temp_db()
 
     @classmethod
     def tearDownClass(cls):
-        # Usuwamy bazę danych po zakończeniu testów
         build_test_db.drop_temp_db()
 
     def setUp(self):

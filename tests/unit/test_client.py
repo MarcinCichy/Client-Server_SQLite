@@ -1,3 +1,4 @@
+import os
 import json
 import unittest
 from client_package.client import Client
