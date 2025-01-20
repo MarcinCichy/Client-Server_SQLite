@@ -7,8 +7,8 @@ import build_test_db
 
 # Ustawienie dla testów – np. SQLite
 os.environ['TEST_ENV'] = 'test'
-# os.environ['TEST_ENGINE'] = 'postgresql'
-os.environ['TEST_ENGINE'] = 'sqlite'
+os.environ['TEST_ENGINE'] = 'postgresql'
+# os.environ['TEST_ENGINE'] = 'sqlite'
 
 
 class TestMessageManagement(unittest.TestCase):

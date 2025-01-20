@@ -31,7 +31,7 @@ def test_get_db_config(filename='test_database.ini'):
     return config
 
 
-def test_get_db_adapter():
+def get_db_adapter():
     """
     Zwraca instancję adaptera bazy danych na podstawie konfiguracji.
     """
@@ -52,6 +52,7 @@ def test_get_db_adapter():
         if not os.path.isabs(db_path):
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             db_path = os.path.join(base_dir, db_path)
+            print(f"DB_PATH = {db_path}")
         return SQLiteDBAdapter(db_path=db_path)
     else:
         raise ValueError(f"Unsupported engine: {engine}")

@@ -52,6 +52,7 @@
             user-info [username] - to show information about account of selected user
             user-pass - to change password
 
+    - v 0.3.0 Added possibility to change database engine PstgreSQL to SQLite
     - v 0.2.2 Added possibility to change password
     - v 0.2.1 Added password hashing and salting
     - v 0.2.0 Added support for PostgreSQL databases. Bye, bye JSON format database ;)

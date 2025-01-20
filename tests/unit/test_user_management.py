@@ -1,5 +1,3 @@
-# tests/unit/test_user_management.py
-
 import os
 import unittest
 from server_package.user_management import UserManagement
@@ -9,8 +7,8 @@ from server_package.user_authentication import UserAuthentication
 import build_test_db
 
 os.environ['TEST_ENV'] = 'test'
-os.environ['TEST_ENGINE'] = 'sqlite'
-# os.environ['TEST_ENGINE'] = 'postgresql'
+# os.environ['TEST_ENGINE'] = 'sqlite'
+os.environ['TEST_ENGINE'] = 'postgresql'
 
 
 class TestUserManagement(unittest.TestCase):
@@ -18,6 +16,7 @@ class TestUserManagement(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Tworzymy i wypełniamy bazę danych raz przed uruchomieniem testów
+        build_test_db.drop_temp_db()
         build_test_db.create_temp_db()
         build_test_db.fill_temp_db()
 
@@ -30,6 +29,21 @@ class TestUserManagement(unittest.TestCase):
         self.database_support = DatabaseSupport()
         self.usr_mgmt = UserManagement(self.database_support)
         self.user_auth = UserAuthentication(self.database_support)
+
+    def test_user_list(self):
+        build_test_db.drop_temp_db()
+        build_test_db.create_temp_db()
+        build_test_db.fill_temp_db()
+        expected_result = {server_response.EXISTING_ACCOUNTS: {
+            "user1": {"permissions": "admin", "status": "active"},
+            "user2": {"permissions": "user", "status": "banned"},
+            "user3": {"permissions": "user", "status": "active"},
+            "user4": {"permissions": "admin", "status": "active"},
+            "user5": {"permissions": "user", "status": "banned"}
+            }
+        }
+        result = self.usr_mgmt.user_list()
+        self.assertEqual(result, expected_result)
 
     def test_create_account_valid_data(self):
         self.usr_mgmt.user_del("jakito")  # Usuń użytkownika, jeśli istnieje
@@ -125,16 +139,7 @@ class TestUserManagement(unittest.TestCase):
         result = self.usr_mgmt.user_perm(data)
         self.assertEqual(result, {user_to_change_permission: server_response.USER_PERMISSIONS_CHANGED})
 
-    def test_user_list(self):
-        expected_result = {server_response.EXISTING_ACCOUNTS: {
-            "user1": {"permissions": "admin", "status": "active"},
-            "user2": {"permissions": "user", "status": "banned"},
-            "user3": {"permissions": "user", "status": "active"},
-            "user5": {"permissions": "user", "status": "banned"}
-            }
-        }
-        result = self.usr_mgmt.user_list()
-        self.assertEqual(result, expected_result)
+
 
     # Dodaj inne testy...
 

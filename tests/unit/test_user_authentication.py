@@ -8,8 +8,8 @@ from server_package.database_support import DatabaseSupport
 import build_test_db
 
 os.environ['TEST_ENV'] = 'test'
-os.environ['TEST_ENGINE'] = 'sqlite'
-# os.environ['TEST_ENGINE'] = 'postgresql'
+# os.environ['TEST_ENGINE'] = 'sqlite'
+os.environ['TEST_ENGINE'] = 'postgresql'
 
 
 class TestUserAuthentication(unittest.TestCase):
@@ -17,6 +17,7 @@ class TestUserAuthentication(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Tworzymy i wypełniamy bazę danych raz przed uruchomieniem testów
+        build_test_db.drop_temp_db()
         build_test_db.create_temp_db()
         build_test_db.fill_temp_db()
 

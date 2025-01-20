@@ -27,7 +27,7 @@ MAX_MSG_IN_INBOX = 5
 
 START_TIME = datetime.now()
 DATE = datetime.now().strftime("%Y-%m-%d")
-VERSION = "0.2.9"
+VERSION = "0.3.0"
 
 # ----------------------------------------------------
 

@@ -164,8 +164,12 @@ if engine == 'postgresql':
 elif engine == 'sqlite':
     import sqlite3
 
-    temp_db_file = config.get('db_path')
+    db_path = r'E:\Programowanie\zaRaczke\Back-End\L011_SQLIte\Client_Server_System_SQLite\db_files\test_db_CS_SQLite.db'
+
+    # temp_db_file = config.get('db_path')
+    temp_db_file = db_path
     # Upewnij się, że ścieżka jest absolutna
+    print(f"SQLite: Test database file: {temp_db_file}")
     if not os.path.isabs(temp_db_file):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         temp_db_file = os.path.join(base_dir, temp_db_file)
@@ -245,7 +249,9 @@ elif engine == 'sqlite':
                     VALUES (?, ?, ?, ?)
                 """, user)
                 user_id = cur.lastrowid
-                password = (user[0] + "password").encode('utf-8')
+                print(f"SQLite: Inserted users: {user_id}")
+                # Używamy wartości z listy passwords
+                password = passwords[idx].encode('utf-8')
                 hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
                 cur.execute("""
                     INSERT INTO passwords (user_id, hashed_password, salt)

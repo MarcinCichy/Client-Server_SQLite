@@ -2,7 +2,7 @@ import sqlite3
 import os
 
 
-db_path = r'E:\Programowanie\zaRaczke\Back-End\L003\Client_Server_System\db_files\db_CS_SQLite.db'
+db_path = r'E:\Programowanie\zaRaczke\Back-End\L011_SQLIte\Client_Server_System\db_files\db_CS_SQLite.db'
 
 
 def create_database():
