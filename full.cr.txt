@@ -1,0 +1,2377 @@
+==================== 
+FILE: Client_Server_System_SQLite/client_package/client.py 
+
+import json
+import socket
+from client_package import client_data
+
+
+class Client:
+    def __init__(self, srv_host, srv_port, srv_buff):
+        self.srv_host = srv_host
+        self.srv_port = srv_port
+        self.srv_buff = srv_buff
+
+    def create_socket(self):
+        return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    def connect_and_send(self, command):
+        with self.create_socket() as s:
+            s.connect((self.srv_host, int(self.srv_port)))
+            s.sendall(command)
+            return s.recv(self.srv_buff)
+
+    def process_command(self, sentence):
+        in_comm = self.input_command(sentence)
+        try:
+            response = self.connect_and_send(in_comm)
+            return self.json_decode_received_data(response)
+        except ConnectionError:
+            return {"Error": "Unable to connect to server"}
+
+    def input_command(self, command):
+        encoded_command = self.json_serialize_command(command).encode(client_data.ENCODE_FORMAT)
+        return encoded_command
+
+    @staticmethod
+    def json_serialize_command(comm):
+        comm_dict = {"command": comm}
+        comm_json = json.dumps(comm_dict)
+        return comm_json
+
+    @staticmethod
+    def json_decode_received_data(data):
+        decoded_data = json.loads(data)
+        return decoded_data
+
+
+def start(sentence):
+    client = Client(client_data.HOST, client_data.PORT, client_data.BUFFER_SIZE)
+    transmit = client.process_command(sentence)
+    return transmit
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/client_communication.py 
+
+import client
+# from windows.handlers import Handlers
+
+
+class ClientCommunication:
+    def __init__(self):
+        pass
+        # self.handler = Handlers(self)
+
+    @staticmethod
+    def send_command(command): 
+        return client.start(command)
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/client_data.py 
+
+import curses
+
+"""
+    Data for the Client part
+"""
+
+# ----------------------------------------------------
+
+HOST = "127.0.0.1"
+PORT = 65432
+BUFFER_SIZE = 1024
+ENCODE_FORMAT = "utf-8"
+
+# ----------------------------------------------------
+
+CLOSE = "close"
+
+# --------------- CONSOLE CONFIGURATION --------------
+
+CONSOLE_TITLE = 'Client Server System'
+PROMPT = "Enter a command: "
+START_POINT = 2
+MAX_MESSAGE_LENGTH = 250
+LOCAL_COMMANDS = ('msg-snd', 'clear', 'user-add')
+
+
+# Color scheme
+COLOR_PAIR = 1
+COLOR_FG = curses.COLOR_GREEN
+COLOR_BG = curses.COLOR_BLACK
+ERROR_COLOR_PAIR = 2
+ERROR_COLOR_FG = curses.COLOR_RED
+ERROR_COLOR_BG = curses.COLOR_BLACK
+
+# Windows dimensions
+HEADER_HEIGHT = 3
+MIDDLE_HEIGHT = 89
+BOTTOM_HEIGHT = 3
+INFO_HEIGHT = 8
+INFO_WIDTH = 48
+LOGIN_HEIGHT = 6
+LOGIN_WIDTH = 60
+ADDUSER_HEIGHT = 6
+ADDUSER_WIDTH = 60
+CHANGE_PASSWD_HEIGHT = 6
+CHANGE_PASSWD_WIDTH = 60
+NEW_MSG_HEIGHT = 12
+NEW_MSG_WIDTH = 50
+SHOW_MSG_HEIGHT = 12
+SHOW_MSG_WIDTH = 50
+
+CLEAR_SPACE_INFO_WINDOW = " " * (INFO_WIDTH - 14)
+CLEAR_SPACE_LOGIN_WINDOW = " " * (LOGIN_WIDTH - 14)
+CLEAR_SPACE_ADDUSER_WINDOW = " " * (ADDUSER_WIDTH - 14)
+CLEAR_SPACE_CHANGE_PASSWD_WINDOW = " " * (CHANGE_PASSWD_WIDTH-25)
+CLEAR_SPACE_NEW_MSG_WINDOW = " " * (NEW_MSG_WIDTH - 24)
+
+# ----------------------------------------------------
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/main_gui.py 
+
+import curses
+
+import client_data
+from windows.bottom_window import BottomWindow
+from windows.header_window import HeaderWindow
+from windows.info_window import InfoWindow
+from windows.login_window import LoginWindow
+from windows.middle_window import MiddleWindow
+from windows.new_message_window import NewMessageWindow
+from windows.show_message_window import ShowMessageWindow
+from windows.user_add_window import UserAddWindow
+from windows.user_change_passw_windows import UserChangePasswWindow
+from windows.handlers import Handlers
+from client_communication import ClientCommunication
+
+
+class Console:
+    def __init__(self, stdscr):
+        self.middle_window = None
+        self.stdscr = stdscr
+        self.handlers = Handlers(self)
+
+        self.login_window = LoginWindow(stdscr, self.middle_window)
+        self.header_window = HeaderWindow(stdscr)
+        self.info_window = InfoWindow(stdscr, self.login_window)
+        self.useradd_window = UserAddWindow(stdscr, self.middle_window, self.login_window)
+        self.new_message_window = NewMessageWindow(stdscr, self.middle_window, self.login_window)
+        self.show_message_window = ShowMessageWindow(stdscr)
+        self.user_change_passw_window = UserChangePasswWindow(stdscr, self.middle_window, self.login_window)
+        self.middle_window = MiddleWindow(stdscr, self.useradd_window, self.new_message_window, self.show_message_window, self.login_window, self.user_change_passw_window)
+        self.bottom_window = BottomWindow(stdscr, self.login_window, self.middle_window)
+        self.init_curses()
+
+    def init_curses(self):
+        curses.start_color()
+        curses.init_pair(client_data.COLOR_PAIR, client_data.COLOR_FG, client_data.COLOR_BG)
+        curses.init_pair(client_data.ERROR_COLOR_PAIR, client_data.ERROR_COLOR_FG, client_data.ERROR_COLOR_BG)
+        curses.noecho()
+        curses.cbreak()
+        curses.curs_set(0)
+        self.stdscr.keypad(1)
+        self.stdscr.nodelay(1)
+        self.stdscr.attron(curses.color_pair(client_data.COLOR_PAIR))
+        self.stdscr.border()
+        self.stdscr.refresh()
+
+    def start(self):
+        while True:
+            if not self.login_window.logged_in:
+                self.hide_windows()
+                self.reset()
+                self.login_window.show()
+            else:
+                self.init_windows()
+                self.useradd_window.middle_window = self.middle_window
+                self.user_change_passw_window.middle_window = self.middle_window
+                self.new_message_window.middle_window = self.middle_window
+                self.run()
+
+    def init_windows(self):
+        self.reset()
+
+        self.header_window.init_window()
+        self.middle_window.init_window()
+        self.info_window.init_window()
+        self.bottom_window.init_window()
+
+    def reset(self):
+        """
+            Reset the console to its initial state. Clear the screen
+        """
+        self.stdscr.clear()
+        self.stdscr.border()
+        self.stdscr.refresh()
+
+    def run(self):
+        while self.login_window.logged_in:
+            self.info_window.show_server_info()
+            server_response = ClientCommunication.send_command(self.bottom_window.get_command())
+            self.middle_window.show_response(server_response)
+
+    def hide_windows(self):
+        self.header_window.window.erase()
+        self.middle_window.window.erase()
+        self.info_window.window.erase()
+        self.bottom_window.window.erase()
+        self.useradd_window.window.erase()
+        self.new_message_window.window.erase()
+        self.show_message_window.window.erase()
+        self.user_change_passw_window.window.erase()
+
+        self.header_window.window.refresh()
+        self.middle_window.window.refresh()
+        self.info_window.window.refresh()
+        self.bottom_window.window.refresh()
+        self.useradd_window.window.refresh()
+        self.new_message_window.window.refresh()
+        self.show_message_window.window.refresh()
+        self.user_change_passw_window.window.refresh()
+
+
+def main(stdscr):
+    console = Console(stdscr)
+    console.start()
+
+
+if __name__ == '__main__':
+    curses.wrapper(main)
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/base_window.py 
+
+class BaseWindow:
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        self.maxY, self.maxX = self.stdscr.getmaxyx()
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/bottom_window.py 
+
+import curses
+import client_package.client_data as client_data
+from .base_window import BaseWindow
+from .handlers import Handlers
+
+
+class BottomWindow(BaseWindow):
+    def __init__(self, stdscr, logged_in_user_data, middle_window):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.BOTTOM_HEIGHT, self.maxX - 1, self.maxY - 3, 0)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.login_window = logged_in_user_data
+        self.handler = Handlers(self, middle_window)
+
+    def init_window(self):
+        self.window.hline(0, 1, 0, self.maxX)
+        self.window.addstr(1, 2, client_data.PROMPT)
+        self.window.refresh()
+
+    def get_command(self):
+        curses.curs_set(2)
+        curses.echo()
+        command = self.window.getstr().decode(errors="ignore")
+
+        logged_username = self.login_window.logged_username
+        command_to_server = self.handler.prepare_command(logged_username, command)
+
+        self.window.move(1, 19)
+        self.window.clrtoeol()
+        return command_to_server
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/handlers.py 
+
+import curses
+import client_package.client_data as client_data
+import time
+
+
+class Handlers:
+    def __init__(self, window_instance, middle_window=None):
+        self.window = window_instance
+        self.middle_window = middle_window
+
+    @staticmethod
+    def prepare_command(user_name, command):
+        precommand = command.split()
+
+        if not precommand:
+            return {user_name: None}
+
+        command_type = precommand[0]
+        command_data = None
+
+        if command_type in ("user-del", "msg-del", "msg-show"):
+            command_data = {command_type: precommand[1] if len(precommand) >= 2 else None}
+        elif command_type == "user-info":
+            command_data = {command_type: precommand[1] if len(precommand) >= 2 else "_"}
+        elif command_type in ("user-perm", "user-stat"):
+            if len(precommand) >= 3:
+                command_data = {command_type: {precommand[1]: precommand[2]}}
+            elif len(precommand) >= 2:
+                command_data = {command_type: {precommand[1]: None}}
+            else:
+                command_data = {command_type: {None: None}}
+        elif len(precommand) == 1:
+            command_data = command_type
+        return {user_name: command_data}
+
+    def server_response_handler(self, server_response):
+        if "Error" in server_response:
+            self.window.clear_previous_messages()
+            self.window.window.attron(curses.color_pair(client_data.ERROR_COLOR_PAIR))
+            self.window.show_character_by_character(server_response)
+            self.window.window.attroff(curses.color_pair(client_data.ERROR_COLOR_PAIR))
+            self.window.window.refresh()
+        elif "User-add" in server_response:
+            self.window.clear_previous_messages()
+            self.window.useradd_window.init_window()
+            self.window.useradd_window.show()
+            self.window.init_window()
+        elif "User-pass" in server_response:
+            self.window.clear_previous_messages()
+            self.window.user_change_passw_window.init_window()
+            self.window.user_change_passw_window.show()
+            self.window.init_window()
+        elif "Msg-snd" in server_response:
+            self.window.clear_previous_messages()
+            self.window.new_message_window.init_window()
+            self.window.new_message_window.show()
+            self.window.init_window()
+        elif "Message to show" in server_response:
+            self.window.clear_previous_messages()
+            self.window.show_message_window.init_window()
+            self.window.show_message_window.show_selected_message(server_response)
+            self.window.init_window()
+        elif "Logout" in server_response:
+            self.window.login_window.logged_in = False
+            self.window.login_window.logged_username = ''
+        elif "Clear" in server_response:
+            self.window.clear_previous_messages()
+        elif "Connection" in server_response:  # for "stop" command
+            self.window.clear_previous_messages()
+            self.window.show_character_by_character(server_response)
+            time.sleep(5)
+            self.window.login_window.logged_in = False
+            self.window.login_window.logged_username = ''
+        else:
+            self.window.clear_previous_messages()
+            self.window.show_character_by_character(server_response)
+
+    def login_handler(self, server_response):
+        if "Error" in server_response:
+            self.window.window.attron(curses.color_pair(client_data.ERROR_COLOR_PAIR))
+            self.window.window.addstr(4, 2, server_response['Error'])
+            self.window.window.clrtoeol()
+            self.window.window.attroff(curses.color_pair(client_data.ERROR_COLOR_PAIR))
+            self.window.window.refresh()
+
+        elif 'Login' in server_response:
+            if server_response['Login'] == "OK":
+                self.window.logged_in = True
+                self.window.logged_username = server_response['login_username']
+                self.window.logged_user_permissions = server_response['user_permissions']
+                self.window.window.refresh()
+
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/header_window.py 
+
+import curses
+import client_package.client_data as client_data
+from .base_window import BaseWindow
+
+
+class HeaderWindow(BaseWindow):
+    def __init__(self, stdscr):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.HEADER_HEIGHT, self.maxX, 0, 0)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+
+    def init_window(self):
+        self.window.border()
+        self.window.addstr(1, int(self.maxX // 2) - int(len(client_data.CONSOLE_TITLE) // 2), client_data.CONSOLE_TITLE)
+        self.window.refresh()
+
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/info_window.py 
+
+import curses
+import client_package.client_data as client_data
+from client_package.client_communication import ClientCommunication
+from .base_window import BaseWindow
+
+
+class InfoWindow(BaseWindow):
+    def __init__(self, stdscr, login_window):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.INFO_HEIGHT, client_data.INFO_WIDTH, 3, self.maxX - 50)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.login_window = login_window
+
+    def init_window(self):
+        self.window.border()
+
+    def clear_line(self, y_poz):
+        self.window.addstr(y_poz, 10, client_data.CLEAR_SPACE_INFO_WINDOW)
+
+    def show_server_info(self):
+        username = self.login_window.logged_username
+        permissions = self.login_window.logged_user_permissions
+
+        command = {username: ""}
+        check_connection = ClientCommunication.send_command(command)
+        if "Error" not in check_connection.keys():
+            self.window.refresh()
+
+            self.clear_line(1)
+            command = {username: "info"}
+            server_response = ClientCommunication.send_command(command)
+            self.window.addstr(1, 2, f'Version: {server_response["version"]}')
+
+            self.clear_line(2)
+            self.window.addstr(2, 2, f'Start at: {server_response["start_at"]}')
+
+            self.clear_line(3)
+            command = {username: "uptime"}
+            self.window.addstr(3, 2, f'Uptime: {ClientCommunication.send_command(command)["uptime"]}')
+
+            self.clear_line(4)
+            self.window.addstr(4, 1, f' Logged: {username}')
+
+            self.clear_line(5)
+            self.window.addstr(5, 1, f' Permissions: {permissions}')
+
+            self.clear_line(6)
+            self.window.refresh()
+
+            command = {username: {"msg_count": ""}}
+            server_response = ClientCommunication.send_command(command)
+
+            if "Error" in server_response:
+                inbox_msg_count = server_response['Error']
+                self.window.addstr(6, 1, f' Inbox msgs: {inbox_msg_count}')
+                self.window.attron(curses.color_pair(client_data.ERROR_COLOR_PAIR))
+                self.window.addstr(6, 13, f' {inbox_msg_count}')
+                self.window.attroff(curses.color_pair(client_data.ERROR_COLOR_PAIR))
+                self.window.refresh()
+            else:
+                inbox_msg_count = server_response["msg-inbox-count"]
+                self.window.addstr(6, 1, f' Inbox msgs: {inbox_msg_count}')
+                self.window.refresh()
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/login_window.py 
+
+import curses
+import client_package.client_data as client_data
+from client_package.client_communication import ClientCommunication
+from .base_window import BaseWindow
+from .handlers import Handlers
+
+
+class LoginWindow(BaseWindow):
+    def __init__(self, stdscr, middle_window):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.LOGIN_HEIGHT, client_data.LOGIN_WIDTH, self.maxY // 4, self.maxX // 4)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.username = ''
+        self.password = ''
+        self.logged_in = False
+        self.middle_window = middle_window
+        self.handler = Handlers(self)
+
+    def init_window(self):
+        self.window.border()
+        self.window.addstr(1, 2, "Username: ")
+        self.window.addstr(2, 2, "Password: ")
+        self.window.refresh()
+
+    def clear_line(self, y_pos):
+        self.window.addstr(y_pos, 10, client_data.CLEAR_SPACE_LOGIN_WINDOW)
+
+    def get_and_mask_password(self):
+        password = ""
+        start_column_pos = 12
+        while True:
+            character = self.window.getch(2, start_column_pos)
+            if character == curses.KEY_ENTER or character == 10 or character == 13:
+                break
+            elif character == curses.KEY_BACKSPACE or character == ord('\b') or character == ord('\x7f'):
+                if len(password) > 0:
+                    password = password[:-1]
+                    start_column_pos -= 1
+                    self.window.move(2, start_column_pos)
+                    self.window.addstr(" ")
+                    self.window.refresh()
+            else:
+                password += chr(character)
+                self.window.addstr(2, start_column_pos, "*")
+                start_column_pos += 1
+                self.window.refresh()
+        return password
+
+    def get_credentials(self):
+        curses.curs_set(2)
+        curses.echo()
+        self.clear_line(1)
+        self.clear_line(2)
+        self.username = self.window.getstr(1, 12).decode(errors="ignore")
+        self.init_window()
+        self.password = self.get_and_mask_password()
+        self.window.refresh()
+        curses.noecho()
+
+    def login(self):
+        command = {
+            self.username: {
+                "login":
+                    (
+                        {'username': self.username},
+                        {'password': self.password}
+                    )
+                }
+        }
+        server_response = ClientCommunication.send_command(command)
+        return server_response
+
+    def show(self):
+        while not self.logged_in:
+            self.init_window()
+            self.get_credentials()
+            response = self.login()
+            self.handler.login_handler(response)
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/middle_window.py 
+
+import curses
+import client_package.client_data as client_data
+from .base_window import BaseWindow
+from .handlers import Handlers
+
+
+class MiddleWindow(BaseWindow):
+    def __init__(self, stdscr, useradd_window, new_message_window, show_message_window, login_window, user_change_passw_window):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(self.maxY - 5, client_data.MIDDLE_HEIGHT, 2, 1)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.previous_message = ''
+        self.maxY = self.window.getmaxyx()[0]
+        self.maxX = self.window.getmaxyx()[1]
+        self.console = None
+        self.handler = Handlers(self)
+        self.useradd_window = useradd_window
+        self.new_message_window = new_message_window
+        self.show_message_window = show_message_window
+        self.login_window = login_window
+        self.user_change_passw_window = user_change_passw_window
+
+    def init_window(self):
+        self.window.addstr(1, 2, "Server response: ")
+        self.window.refresh()
+
+    def clear_previous_messages(self):
+        """
+                Used to clear a message before displaying a new one.
+        """
+        for num_of_row in range(self.maxY - client_data.START_POINT - 1):
+            self.window.move(client_data.START_POINT + num_of_row, 10)
+            self.window.clrtoeol()
+            self.window.refresh()
+
+    def show_character_by_character(self, sentence):
+        """
+                To show answer from server_package in terminal.
+                The answer is displayed letter by letter like in old terminals ;-)
+        """
+        self.clear_previous_messages()
+        row = 0
+        column = 0
+        self.window.refresh()
+        if "msg" in sentence.keys():
+            # del sentence['msg']['message_id']
+            sentence = sentence['msg']
+            self.window.addstr(2, 10, "Messages: ")
+            self.window.hline(client_data.START_POINT + 1, 10, 0, 30)
+            row = 2
+        elif "Existing_accounts" in sentence.keys():
+            sentence = sentence['Existing_accounts']
+            self.window.addstr(2, 10, "Existing accounts: ")
+            self.window.hline(client_data.START_POINT + 1, 10, 0, 30)
+            row = 2
+        elif "Account_info" in sentence.keys():
+            sentence = sentence['Account_info']
+            self.window.addstr(2, 10, "Account info: ")
+            self.window.hline(client_data.START_POINT + 1, 10, 0, 30)
+            row = 2
+
+        for response_keyword, response_content in sentence.items():
+            if response_content == "line":
+                self.window.hline(client_data.START_POINT + row, 10, 0, self.maxX)
+                row += 1
+            # if 'message_id' in response_content:
+            #     del response_content['message_id']
+            text = f"{response_keyword} : {response_content}"
+            self.window.refresh()
+            for char in str(text):
+                if column == self.maxX - 3:
+                    row += 1
+                    column = 0
+                if char not in '{}':
+                    self.window.addch(client_data.START_POINT + row, 10 + column, str(char))
+                curses.delay_output(100)
+                self.window.refresh()
+                column += 1
+            row += 1
+            column = 0
+
+    def show_response(self, server_response):
+        self.handler.server_response_handler(server_response)
+        self.previous_message = server_response
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/new_message_window.py 
+
+import curses
+from datetime import datetime
+import client_package.client_data as client_data
+from .base_window import BaseWindow
+from client_package.client_communication import ClientCommunication
+
+
+class NewMessageWindow(BaseWindow):
+    def __init__(self, stdscr, middle_window, login_window):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.NEW_MSG_HEIGHT, client_data.NEW_MSG_WIDTH, self.maxY // 4,
+                                         self.maxX // 4)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.recipient = ''
+        self.content = ''
+        self.middle_window = middle_window
+        self.message_exceeded = None
+        self.max_msg_length = None      # in the new instance the attribute must be reset
+        self.login_window = login_window
+
+    def init_window(self):
+        self.max_msg_length = client_data.MAX_MESSAGE_LENGTH
+
+        self.window.border()
+        self.window.refresh()
+        self.window.addstr(1, 2, "Recipient: ")
+        self.window.refresh()
+        self.window.addstr(2, 2, "Content: ")
+        self.window.refresh()
+        self.window.addstr(10, client_data.NEW_MSG_WIDTH - 9, f'0/{self.max_msg_length}')
+        self.window.refresh()
+
+    def clear_line(self, y_poz):
+        self.window.addstr(y_poz, 12, client_data.CLEAR_SPACE_NEW_MSG_WINDOW)
+
+    def number_of_chars(self):
+        count = len(self.content)
+        if count >= 250:
+            self.window.attron(curses.color_pair(client_data.ERROR_COLOR_PAIR))
+        else:
+            self.window.attron(curses.color_pair(client_data.COLOR_PAIR))
+        self.window.addstr(10, client_data.NEW_MSG_WIDTH - 9, f'{count}/{self.max_msg_length} ')
+        self.window.refresh()
+
+    def get_new_message(self):
+        logged_username = self.login_window.logged_username
+
+        self.content = ''
+        self.window.attron(curses.color_pair(client_data.COLOR_PAIR))
+        curses.curs_set(2)
+        curses.echo()
+        self.window.refresh()
+        self.clear_line(1)
+        self.clear_line(2)
+
+        self.recipient = self.window.getstr(1, 15).decode(errors="ignore")
+        self.init_window()
+
+        self.message_exceeded = False
+
+        content_y, content_x = 2, 15
+        self.window.move(content_y, content_x)
+
+        while True:
+            key = self.window.getch()
+            if key == 10:  # Enter
+                break
+            content_y, content_x = self.handle_key(key, content_y, content_x)
+
+        command = self.build_command(logged_username)
+        self.window.erase()
+        self.window.refresh()
+        curses.noecho()
+
+        server_response = ClientCommunication.send_command(command)
+        self.middle_window.show_response(server_response)
+
+    def handle_key(self, key, content_y, content_x):
+        if key == curses.KEY_BACKSPACE or key == ord('\b') or key == ord('\x7f'):
+            content_y, content_x = self.handle_backspace(content_y, content_x)
+        elif key in [curses.KEY_LEFT, curses.KEY_RIGHT, curses.KEY_UP, curses.KEY_DOWN]:
+            content_y, content_x = self.handle_arrow_keys(key, content_y, content_x)
+        elif key == curses.KEY_DC:
+            content_y, content_x = self.handle_delete(content_y, content_x)
+        else:
+            content_y, content_x = self.handle_char_input(key, content_y, content_x)
+        return content_y, content_x
+
+    def handle_backspace(self, content_y, content_x):
+        if content_x > 15:
+            content_x -= 1
+            self.content = self.content[:content_x - 15] + self.content[content_x - 14:]
+            self.window.delch(content_y, content_x)
+            self.window.insstr(content_y, client_data.NEW_MSG_WIDTH - 2, " ")
+            if content_x < client_data.NEW_MSG_WIDTH - 2:
+                self.window.move(content_y, content_x)
+            self.message_exceeded = False
+            self.number_of_chars()
+            self.window.move(content_y, content_x)
+            self.window.attron(curses.color_pair(client_data.COLOR_PAIR))
+        else:
+            if content_y > 2:
+                content_y -= 1
+                content_x = len(self.content) % (client_data.NEW_MSG_WIDTH - 15) + 15
+                self.window.move(content_y, content_x)
+                self.message_exceeded = False
+        return content_y, content_x
+
+    def handle_arrow_keys(self, key, content_y, content_x):
+        if key == curses.KEY_LEFT:
+            if content_x > 15:
+                content_x -= 1
+                self.window.move(content_y, content_x)
+        elif key == curses.KEY_RIGHT:
+            if content_x < client_data.NEW_MSG_WIDTH - 2:
+                content_x += 1
+                self.window.move(content_y, content_x)
+        elif key == curses.KEY_UP:
+            if content_y > 2:
+                content_y -= 1
+                self.window.move(content_y, content_x)
+        elif key == curses.KEY_DOWN:
+            if content_y < client_data.NEW_MSG_HEIGHT - 2:
+                content_y += 1
+                self.window.move(content_y, content_x)
+        return content_y, content_x
+
+    def handle_delete(self, content_y, content_x):
+        if content_x < client_data.NEW_MSG_WIDTH - 2:
+            self.content = self.content[:content_x - 15] + self.content[content_x - 14:]
+            self.window.delch(content_y, content_x)
+            self.window.insstr(content_y, client_data.NEW_MSG_WIDTH - 2, " ")
+            if content_x < client_data.NEW_MSG_WIDTH - 2:
+                self.window.move(content_y, content_x)
+            self.message_exceeded = False
+            self.number_of_chars()
+        self.window.move(content_y, content_x)
+        return content_y, content_x
+
+    def handle_char_input(self, key, content_y, content_x):
+        char = chr(key)
+        if char.isprintable() and len(self.content) < self.max_msg_length:
+            if content_x == client_data.NEW_MSG_WIDTH - 3:
+                if content_y < client_data.NEW_MSG_HEIGHT - 1:
+                    content_y += 1
+                    content_x = 15
+            self.content = self.content[:content_x - 15] + char + self.content[content_x - 14:]
+            if len(self.content) >= self.max_msg_length:
+                self.window.move(content_y, content_x)
+            self.window.addch(content_y, content_x, char)
+            content_x += 1
+            curses.noecho()
+        self.number_of_chars()
+        self.window.move(content_y, content_x)
+        self.window.attron(curses.color_pair(client_data.COLOR_PAIR))
+        if len(self.content) >= self.max_msg_length:
+            self.message_exceeded = True
+        else:
+            self.message_exceeded = False
+        return content_y, content_x
+
+    def build_command(self, logged_username):
+        message_date = datetime.now().strftime("%Y-%m-%d")
+        command = {
+            logged_username: {
+                "new_message": (
+                    {'sender': logged_username},
+                    {'date': message_date},
+                    {'recipient': self.recipient},
+                    {'content': self.content}
+                )
+            }
+        }
+        return command
+
+    def show(self):
+        self.init_window()
+        self.window.keypad(1)
+        self.window.timeout(-1)
+        curses.curs_set(2)
+        curses.echo()
+
+        self.get_new_message()
+        curses.noecho()
+        curses.curs_set(0)
+        self.window.keypad(0)
+        self.window.timeout(100)
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/show_message_window.py 
+
+import curses
+from .base_window import BaseWindow
+import client_package.client_data as client_data
+
+
+class ShowMessageWindow(BaseWindow):
+    def __init__(self, stdscr):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.SHOW_MSG_HEIGHT, client_data.SHOW_MSG_WIDTH, self.maxY // 4,
+                                         self.maxX // 4)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.content = ''
+        self.date = ''
+        self.sender = ''
+        self.maxX_SMW = self.window.getmaxyx()[1]
+
+    def init_window(self):
+        self.window.border()
+        self.window.addstr(1, 2, "From: ")
+        self.window.addstr(2, 2, "Date: ")
+        self.window.addstr(3, 2, "Content: ")
+        self.window.refresh()
+
+    def show_selected_message(self, message_content):
+        self.sender = message_content["Message to show"]["sender_id"]
+        self.date = message_content["Message to show"]["date"]
+        self.content = message_content["Message to show"]["content"]
+
+        self.init_window()
+        self.small_show_character_by_character(1, self.sender)
+        self.window.refresh()
+        self.small_show_character_by_character(2, self.date)
+        self.window.refresh()
+        self.small_show_character_by_character(3, self.content)
+        self.window.refresh()
+
+        curses.curs_set(0)
+
+        while True:
+            key = self.window.getch()
+            if key == ord('\n'):  # Enter
+                self.window.erase()
+                self.window.refresh()
+                break
+
+    def small_show_character_by_character(self, row, text):
+        column = 0
+        self.window.refresh()
+        for char in str(text):
+            if column >= self.maxX_SMW - 14:
+                row += 1
+                column = 0
+            self.window.addch(row, 11 + column, str(char))
+            curses.delay_output(100)
+            self.window.refresh()
+            column += 1
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/user_add_window.py 
+
+import curses
+from datetime import datetime
+import client_package.client_data as client_data
+from .base_window import BaseWindow
+from client_package.client_communication import ClientCommunication
+
+
+class UserAddWindow(BaseWindow):
+    def __init__(self, stdscr, middle_window, login_window):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.ADDUSER_HEIGHT, client_data.ADDUSER_WIDTH, self.maxY // 4,
+                                         self.maxX // 4)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.new_username = ''
+        self.new_password = ''
+        self.new_permissions = ''
+        self.middle_window = middle_window
+        #  self.activation_date = datetime.now().strftime("%Y-%m-%d")
+        self.login_window = login_window
+
+    def init_window(self):
+        self.window.border()
+        self.window.addstr(1, 2, "Username: ")
+        self.window.addstr(2, 2, "Password: ")
+        self.window.addstr(3, 2, "Permissions: ")
+        self.window.refresh()
+
+    def clear_line(self, y_poz):
+        self.window.addstr(y_poz, 12, client_data.CLEAR_SPACE_ADDUSER_WINDOW)
+
+    def get_new_account_data(self):
+        logged_username = self.login_window.logged_username
+        curses.curs_set(2)
+        curses.echo()
+        self.window.refresh()
+        self.clear_line(1)
+        self.clear_line(2)
+        self.clear_line(3)
+        self.new_username = self.window.getstr(1, 15).decode(errors="ignore")
+        self.init_window()  # this line is needed to preserve window borders at right side
+        self.new_password = self.window.getstr(2, 15).decode(errors="ignore")
+        self.init_window()  # this line is needed to preserve window borders at right side
+        self.new_permissions = self.window.getstr(3, 15).decode(errors="ignore")
+
+        command = self.build_command(logged_username)
+        self.window.erase()
+        self.window.refresh()
+        curses.noecho()
+
+        server_response = ClientCommunication.send_command(command)
+        self.middle_window.show_response(server_response)
+
+    def build_command(self, logged_username):
+        activation_date = datetime.now().strftime("%Y-%m-%d")
+
+        command = {
+            logged_username: {
+                    "create_account": (
+                        {'username': self.new_username},
+                        {'password': self.new_password},
+                        {'permissions': self.new_permissions},
+                        {'status': "active"},
+                        {'activation_date': activation_date}
+                    )
+                }
+        }
+        return command
+
+    def show(self):
+        self.init_window()
+        self.window.keypad(1)
+        self.window.timeout(-1)
+        curses.curs_set(2)
+        curses.echo()
+
+        self.init_window()
+        self.get_new_account_data()
+
+        curses.noecho()
+        curses.curs_set(0)
+        self.window.keypad(0)
+        self.window.timeout(100)
+
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/client_package/windows/user_change_passw_windows.py 
+
+import curses
+import client_package.client_data as client_data
+from .base_window import BaseWindow
+from client_package.client_communication import ClientCommunication
+
+
+class UserChangePasswWindow(BaseWindow):
+    def __init__(self, stdscr, middle_window, login_window):
+        super().__init__(stdscr)
+        self.window = self.stdscr.subwin(client_data.CHANGE_PASSWD_HEIGHT, client_data.CHANGE_PASSWD_WIDTH, self.maxY // 4,
+                                         self.maxX // 4)
+        self.window.bkgd(' ', curses.color_pair(client_data.COLOR_PAIR))
+        self.username = ''
+        self.new_password = ''
+        self.confirm_new_password = ''
+        self.middle_window = middle_window
+        self.login_window = login_window
+
+    def init_window(self):
+        self.window.border()
+        self.window.addstr(1, 2, "Username: ")
+        self.window.addstr(2, 2, "New Password: ")
+        self.window.addstr(3, 2, "Confirm New Password: ")
+        self.window.refresh()
+
+    def clear_line(self, y_poz):
+        self.window.addstr(y_poz, 24, client_data.CLEAR_SPACE_CHANGE_PASSWD_WINDOW)
+
+    def get_change_password_data(self):
+        logged_username = self.login_window.logged_username
+        curses.curs_set(2)
+        curses.echo()
+        self.window.refresh()
+        self.clear_line(1)
+        self.clear_line(2)
+        self.clear_line(3)
+        self.username = self.window.getstr(1, 12).decode(errors="ignore")
+        self.init_window()  # this line is needed to preserve window borders at right side
+        self.new_password = self.window.getstr(2, 16).decode(errors="ignore")
+        self.init_window()  # this line is needed to preserve window borders at right side
+        self.confirm_new_password = self.window.getstr(3, 24).decode(errors="ignore")
+
+        command = self.build_command(logged_username)
+        self.window.erase()
+        self.window.refresh()
+        curses.noecho()
+
+        server_response = ClientCommunication.send_command(command)
+        self.middle_window.show_response(server_response)
+
+    def build_command(self, logged_username):
+
+        command = {
+            logged_username: {
+                    "change_password": (
+                        {'username': self.username},
+                        {'new_password': self.new_password},
+                        {'confirm_new_password': self.confirm_new_password}
+                    )
+                }
+        }
+        return command
+
+    def show(self):
+        self.init_window()
+        self.window.keypad(1)
+        self.window.timeout(-1)
+        curses.curs_set(2)
+        curses.echo()
+
+        self.init_window()
+        self.get_change_password_data()
+
+        curses.noecho()
+        curses.curs_set(0)
+        self.window.keypad(0)
+        self.window.timeout(100)
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/build_SQLite_db.py 
+
+import sqlite3
+import os
+
+
+db_path = r'E:\Programowanie\zaRaczke\Back-End\L011_SQLIte\Client_Server_System\db_files\db_CS_SQLite.db'
+
+
+def create_database():
+    try:
+        with sqlite3.connect(db_path) as connection:
+            cursor = connection.cursor()
+    except sqlite3.Error as e:
+        print(f"Error: {e}")
+    else:
+        print(f"Database created successfully")
+
+
+def create_table_users():
+    try:
+        with sqlite3.connect(db_path) as connection:
+            cursor = connection.cursor()
+            cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS users (
+                          user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          user_name TEXT NOT NULL,
+                          permissions TEXT NOT NULL,
+                          status TEXT NOT NULL,
+                          activation_date datetime NOT NULL,
+                          login_time timestamp
+                        )
+                        ''')
+    except sqlite3.Error as e:
+        print(f"Error: {e}")
+    else:
+        print("Table users created successfully")
+
+
+def create_table_messages():
+    try:
+        with sqlite3.connect(db_path) as connection:
+            cursor = connection.cursor()
+            cursor.execute('''
+                           CREATE TABLE IF NOT EXISTS messages (
+                              message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                              sender_id TEXT NOT NULL,
+                              date datetime NOT NULL,
+                              recipient_id TEXT NOT NULL,
+                              content TEXT NOT NULL
+                            )
+                            ''')
+    except sqlite3.Error as e:
+        print(f"Error: {e}")
+    else:
+        print("Table messages created successfully")
+
+
+def create_table_passwords():
+    try:
+        with sqlite3.connect(db_path) as connection:
+            cursor = connection.cursor()
+            cursor.execute('''
+                           CREATE TABLE IF NOT EXISTS passwords (
+                              user_id INTEGER PRIMARY KEY,
+                              hashed_password BLOB NOT NULL,
+                              salt BLOB NOT NULL
+                            )
+                            ''')
+    except sqlite3.Error as e:
+        print(f"Error: {e}")
+    else:
+        print("Table passwords created successfully")
+
+
+if __name__ == '__main__':
+    if os.path.exists(db_path):
+        print("Baza danych istnieje.")
+    else:
+        print("Baza danych nie zosta³a znaleziona.")
+        create_database()
+        create_table_users()
+        create_table_messages()
+        create_table_passwords()
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/config.py 
+
+import os
+from configparser import ConfigParser
+
+
+def get_db_adapter():
+    """
+    Zwraca instancjê adaptera bazy danych w zale¿noœci od wartoœci klucza 'engine'
+    w sekcji [database] pliku konfiguracyjnego.
+
+    Jeœli TEST_ENV jest ustawione na 'test', konfiguracja jest pobierana z 'test_database.ini',
+    w przeciwnym razie z 'database.ini'.
+
+    Obs³ugiwane wartoœci:
+      - engine=postgresql – odczytuje parametry z sekcji [postgresql] i tworzy PostgresDBAdapter
+      - engine=sqlite – odczytuje parametry z sekcji [sqlite] i tworzy SQLiteDBAdapter
+    """
+    # Wybierz plik konfiguracyjny w zale¿noœci od zmiennej œrodowiskowej
+    config_file = 'test_database.ini' if os.getenv('TEST_ENV') == 'test' else 'database.ini'
+
+    parser = ConfigParser()
+    read_files = parser.read(config_file)
+    if not read_files:
+        raise Exception(f"Nie uda³o siê odczytaæ pliku konfiguracyjnego: {config_file}")
+
+    if not parser.has_section('database'):
+        raise Exception(f"No [database] section found in {config_file}")
+
+    # Mo¿esz te¿ zdecydowaæ, czy chcesz przyjmowaæ silnik z konfiguracji, czy te¿ wymuszaæ
+    # np. TEST_ENGINE na podstawie zmiennej œrodowiskowej.
+    engine = os.getenv("TEST_ENGINE", parser.get('database', 'engine', fallback='postgresql'))
+    print(f"ENGINE = {engine}")
+
+    # Obs³uga PostgreSQL
+    if engine == 'postgresql':
+        if not parser.has_section('postgresql'):
+            raise Exception(f"No [postgresql] section found in {config_file}")
+        host = parser.get('postgresql', 'host')
+        port = parser.get('postgresql', 'port')
+        dbname = parser.get('postgresql', 'dbname')
+        user = parser.get('postgresql', 'user')
+        password = parser.get('postgresql', 'password')
+
+        from server_package.db_adapter_postgres import PostgresDBAdapter
+        return PostgresDBAdapter(host, port, dbname, user, password)
+
+    # Obs³uga SQLite
+    elif engine == 'sqlite':
+        if not parser.has_section('sqlite'):
+            raise Exception(f"No [sqlite] section found in {config_file}")
+        db_path_relative = parser.get('sqlite', 'db_path')
+        # Jeœli chcesz, aby folder db_files pozostawa³ w g³ównym katalogu projektu,
+        # a plik config.py znajduje siê w server_package, mo¿esz zrobiæ tak:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.dirname(current_dir)
+        full_path = os.path.join(base_dir, db_path_relative)
+        print(f"FULL_PATH = {full_path}")
+
+        from server_package.db_adapter_sqlite import SQLiteDBAdapter
+        return SQLiteDBAdapter(db_path=full_path)
+
+    else:
+        raise ValueError(f"Unsupported engine: {engine}")
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/crypt_supprt.py 
+
+import bcrypt
+
+
+class CryptoSupport:
+
+    def password_hashing(self, password):
+        salt = bcrypt.gensalt()
+        # print(f'SALT: {salt}')
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+        # print(f'hashed passw: {hashed_password}')
+        return hashed_password, salt
+
+    def verifying_password(self, stored_hashed_password, provided_password):
+        if isinstance(provided_password, str):
+            provided_password = provided_password.encode('utf-8')
+        if isinstance(stored_hashed_password, memoryview):
+            stored_hashed_password = stored_hashed_password.tobytes()
+        return bcrypt.checkpw(provided_password, stored_hashed_password)
+
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/database_support.py 
+
+from functools import wraps
+import server_package.server_response as server_response
+from server_package.config import get_db_adapter
+from psycopg2 import sql
+
+
+def handle_database_errors(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(f"Error: {e}")
+            return server_response.E_DATABASE_ERROR
+    return wrapper
+
+
+class DatabaseSupport:
+    def __init__(self):
+        self.adapter = get_db_adapter()
+
+    @handle_database_errors
+    def data_update(self, table, column, user_name, new_value=None):
+        # Jeœli adapter to SQLite, budujemy zapytanie przy u¿yciu f-stringa i placeholderów '?'.
+        if self.adapter.__class__.__name__ == "SQLiteDBAdapter":
+            query = f"UPDATE {table} SET {column} = ? WHERE user_name = ?"
+            self.adapter.execute_query(query, (new_value, user_name))
+        else:
+            # Dla PostgreSQL u¿ywamy psycopg2.sql, gdzie placeholdery to %s.
+            query = sql.SQL("UPDATE {table} SET {column} = %s WHERE user_name = %s").format(
+                table=sql.Identifier(table),
+                column=sql.Identifier(column)
+            )
+            self.adapter.execute_query(query.as_string(self.adapter.connection), (new_value, user_name))
+
+    @handle_database_errors
+    def get_info_about_user(self, user_name):
+        query = """
+            SELECT u.*, p.hashed_password, p.salt
+            FROM users u
+            JOIN passwords p ON u.user_id = p.user_id
+            WHERE u.user_name = %s
+        """
+        result = self.adapter.fetch_one(query, (user_name,))
+        if result:
+            # print(f'RESULT_DICT: {result}')
+            return result
+        else:
+            return None
+
+    @handle_database_errors
+    def get_all_users_list(self):
+        query = "SELECT user_name, permissions, status FROM users ORDER BY user_id"
+        rows = self.adapter.fetch_all(query)
+        return rows
+
+    @handle_database_errors
+    def check_if_user_exist(self, user_name):
+        query = "SELECT 1 FROM users WHERE user_name = %s"
+        row = self.adapter.fetch_one(query, (user_name,))
+        return bool(row)
+
+    @handle_database_errors
+    def inbox_msg_counting(self, recipient_id):
+        query = "SELECT COUNT(*) as cnt FROM messages WHERE recipient_id = %s"
+        row = self.adapter.fetch_one(query, (recipient_id,))
+        if row:
+            return row['cnt']  # bo z adaptera mamy np. {'cnt': 5}
+        return 0
+
+    @handle_database_errors
+    def check_if_user_is_logged_in(self, user_name):
+        query = "SELECT login_time FROM users WHERE user_name = %s"
+        row = self.adapter.fetch_one(query, (user_name,))
+        if row and row.get('login_time'):
+            return True
+        else:
+            return False
+
+    @handle_database_errors
+    def add_account_to_db(self, new_data, password_data):
+        query_users = """
+            INSERT INTO users (user_name, permissions, status, activation_date)
+            VALUES (%s, %s, %s, %s)
+            RETURNING user_id
+        """
+        row = self.adapter.fetch_one(query_users, new_data)
+        user_id = row['user_id'] if row else None
+        if user_id:
+            query_passwords = """
+                INSERT INTO passwords (user_id, hashed_password, salt)
+                VALUES (%s, %s, %s)
+            """
+            pass_data_with_id = (user_id,) + password_data
+            self.adapter.execute_query(query_passwords, pass_data_with_id)
+
+    @handle_database_errors
+    def delete_record_from_db(self, table, data):
+        query = sql.SQL("DELETE FROM {table} WHERE user_name = %s").format(
+            table=sql.Identifier(table)
+        )
+        self.adapter.execute_query(query.as_string(self.adapter.connection), (data,))
+
+    @handle_database_errors
+    def show_all_messages_inbox(self, username):
+        query = "SELECT message_id, sender_id, date FROM messages WHERE recipient_id = %s ORDER BY message_id"
+        rows = self.adapter.fetch_all(query, (username,))
+        return rows
+
+    @handle_database_errors
+    def show_selected_message(self, msg_id):
+        query = "SELECT * FROM messages WHERE message_id = %s"
+        row = self.adapter.fetch_one(query, (msg_id,))
+        return row if row else None
+
+    @handle_database_errors
+    def delete_selected_message(self, msg_id):
+        query = "DELETE FROM messages WHERE message_id = %s"
+        self.adapter.execute_query(query, (msg_id,))
+
+    @handle_database_errors
+    def delete_all_user_messages(self, user_to_del):
+        query = "DELETE FROM messages WHERE recipient_id = %s"
+        self.adapter.execute_query(query, (user_to_del,))
+
+    @handle_database_errors
+    def add_new_message_to_db(self, new_data):
+        query = "INSERT INTO messages (sender_id, date, recipient_id, content) VALUES (%s, %s, %s, %s)"
+        self.adapter.execute_query(query, new_data)
+
+    @handle_database_errors
+    def password_update(self, table, column1, column2, user_id, new_value1=None, new_value2=None):
+        if self.adapter.__class__.__name__ == "SQLiteDBAdapter":
+            # Dla SQLite budujemy zapytania przy u¿yciu f-stringa i placeholderów '?'
+            query1 = f"UPDATE {table} SET {column1} = ? WHERE user_id = ?"
+            self.adapter.execute_query(query1, (new_value1, user_id))
+
+            query2 = f"UPDATE {table} SET {column2} = ? WHERE user_id = ?"
+            self.adapter.execute_query(query2, (new_value2, user_id))
+        else:
+            # Dla PostgreSQL u¿ywamy psycopg2.sql
+            query1 = sql.SQL("UPDATE {table} SET {column} = %s WHERE user_id = %s").format(
+                table=sql.Identifier(table),
+                column=sql.Identifier(column1)
+            )
+            self.adapter.execute_query(query1.as_string(self.adapter.connection), (new_value1, user_id))
+
+            query2 = sql.SQL("UPDATE {table} SET {column} = %s WHERE user_id = %s").format(
+                table=sql.Identifier(table),
+                column=sql.Identifier(column2)
+            )
+            self.adapter.execute_query(query2.as_string(self.adapter.connection), (new_value2, user_id))
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/db_adapter_interface.py 
+
+from abc import ABC, abstractmethod
+
+
+class DatabaseAdapter(ABC):
+    """
+    Interface (klasa bazowa) definiuj¹ca metody, któe musza zaimplementowaæ apatery dla poszczególnych baz danych.
+    """
+
+    @abstractmethod
+    def connect(self):
+        """
+        Nawi¹zuje po³aczenia z baza danych
+        """
+
+    @abstractmethod
+    def disconnect(self):
+        """
+        Zamyka po³aczenie z baza danych
+        """
+
+    @abstractmethod
+    def execute_query(self, query, params=None):
+        """
+        Wykonuje zapytanie SQL (typu INSERT, UPDATE, DELETE)
+        bez zwracania wyników.
+        """
+
+    @abstractmethod
+    def fetch_one(self, query, params=None):
+        """
+        Wykonuje zapytanie SELECT i pobiera jeden rekord z bazy danych
+        lub None, jeœli brak wyników.
+        """
+
+    @abstractmethod
+    def fetch_all(self, query, params=None):
+        """
+        Wykonuje zapytanie SELECT i zwraca listê krotek lub pust¹ listê.
+        """
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/db_adapter_postgres.py 
+
+import psycopg2
+import psycopg2.extras
+from server_package.db_adapter_interface import DatabaseAdapter
+
+
+class PostgresDBAdapter(DatabaseAdapter):
+    def __init__(self, host, port, dbname, user, password):
+        self.host = host
+        self.port = port
+        self.dbname = dbname
+        self.user = user
+        self.password = password
+        self.connection = None
+
+    def connect(self):
+        if not self.connection:
+            self.connection = psycopg2.connect(
+                host=self.host,
+                port=self.port,
+                dbname=self.dbname,
+                user=self.user,
+                password=self.password
+            )
+
+    def disconnect(self):
+        if self.connection:
+            self.connection.close()
+            self.connection = None
+
+    def execute_query(self, query, params=None):
+        """
+        Do zapytañ bez zwracania wyników, np. INSERT, UPDATE, DELETE.
+        """
+        self.connect()
+        with self.connection.cursor() as cur:
+            cur.execute(query, params)
+        self.connection.commit()
+
+    def fetch_one(self, query, params=None):
+        """
+        Zwraca s³ownik reprezentuj¹cy pojedynczy wiersz (lub None).
+        """
+        self.connect()
+        with self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute(query, params)
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def fetch_all(self, query, params=None):
+        """
+        Zwraca listê s³owników (lub pust¹ listê).
+        """
+        self.connect()
+        with self.connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            return [dict(r) for r in rows] if rows else []
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/db_adapter_sqlite.py 
+
+import sqlite3
+from server_package.db_adapter_interface import DatabaseAdapter
+
+
+class SQLiteDBAdapter(DatabaseAdapter):
+    def __init__(self, db_path):
+        """
+        db_path -> œcie¿ka do bazy SQLite, np. "my_database.db"
+        """
+        self.db_path = db_path
+        self.connection = None
+
+    def connect(self):
+        if not self.connection:
+            # self.connection = sqlite3.connect(self.db_path)
+            self.connection = sqlite3.connect(self.db_path,
+                                              detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+            # row_factory -> obiekt sqlite3.Row
+            self.connection.row_factory = sqlite3.Row
+
+    def disconnect(self):
+        if self.connection:
+            self.connection.close()
+            self.connection = None
+
+    def execute_query(self, query, params=None):
+        """
+        Zapytania bez zwracania wyników (INSERT, UPDATE, DELETE).
+        """
+        self.connect()
+        query = query.replace('%s', '?')  # zamiana placeholderów
+        with self.connection:
+            cursor = self.connection.cursor()
+            cursor.execute(query, params or [])
+
+    def fetch_one(self, query, params=None):
+        """
+        Zwraca s³ownik (jeden wiersz) lub None.
+        """
+        self.connect()
+        query = query.replace('%s', '?')
+        cursor = self.connection.cursor()
+        cursor.execute(query, params or [])
+        row = cursor.fetchone()
+        if not row:
+            return None
+        # row to sqlite3.Row -> s³ownik
+        return dict(row)
+
+    def fetch_all(self, query, params=None):
+        """
+        Zwraca listê s³owników lub pust¹ listê.
+        """
+        self.connect()
+        query = query.replace('%s', '?')
+        cursor = self.connection.cursor()
+        cursor.execute(query, params or [])
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows] if rows else []
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/functions.py 
+
+from datetime import datetime
+import os
+import server_package.server_data as server_data
+import server_package.server_response as server_response
+from itertools import islice
+
+
+class SystemUtilities:
+    @staticmethod
+    def clear_screen():
+        """Clear the screen in depends on operating system
+        (Windows, Linux or iOS)."""
+
+        if os.name == "nt":
+            os.system("cls")
+        else:
+            os.system("clear")
+
+    @staticmethod
+    def uptime():
+        now = datetime.now()
+        live_time = now - server_data.START_TIME
+        return {"uptime": str(live_time).split(".")[0]}
+
+    @staticmethod
+    def info():
+        return {"version": server_data.VERSION, "start_at": str(server_data.DATE)}
+
+    @staticmethod
+    def help(permissions):
+        if "user" in permissions:
+            user_help_dict = dict(islice(server_response.HELP_DICT.items(), 9))
+            help_content = user_help_dict
+        elif "admin" in permissions:
+            help_dict = server_response.HELP_DICT
+            help_content = help_dict
+        else:
+            help_content = server_response.E_WRONG_PERMISSIONS
+        return help_content
+
+    @staticmethod
+    def stop():
+        return server_response.CONNECTION_CLOSE
+
+    @staticmethod
+    def clear():
+        return {"Clear": ""}
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/menu.py 
+
+from server_package.functions import SystemUtilities
+from server_package.message_management import MessageManagement
+from server_package.user_management import UserManagement
+from server_package.user_authentication import UserAuthentication
+from server_package.database_support import DatabaseSupport
+import server_package.server_response as server_response
+
+
+class CommandHandler:
+    def __init__(self):
+        self.database_support = DatabaseSupport()
+        self.username = ""
+        self.new_command = ""
+        self.permissions = ""
+        self.user_auth = UserAuthentication(self.database_support)
+        self.user_management = UserManagement(self.database_support)
+        self.message_management = MessageManagement(self.database_support)
+        self.sys_utils = SystemUtilities()
+
+        self.all_users_commands = {
+            "login": self.user_auth.login,
+            "logout": self.user_auth.logout,
+            "help": self.sys_utils.help,
+            "info": self.sys_utils.info,
+            "uptime": self.sys_utils.uptime,
+            "clear": self.sys_utils.clear,
+            "msg_count": self.message_management.msg_count,
+            "msg-list": self.message_management.msg_list,
+            "msg-snd": self.message_management.msg_snd,
+            "msg-del": self.message_management.msg_del,
+            "new_message": self.message_management.new_message,
+            "msg-show": self.message_management.msg_show
+        }
+        self.admin_commands = {
+            "stop": self.sys_utils.stop,
+            "user-add": self.user_management.user_add,
+            "user-list": self.user_management.user_list,
+            "user-del": self.user_management.user_del,
+            "user-perm": self.user_management.user_perm,
+            "user-stat": self.user_management.user_stat,
+            "user-info": self.user_management.user_info,
+            "create_account": self.user_management.create_account,
+            "user-pass": self.user_management.user_pass,
+            "change_password": self.user_management.change_password
+        }
+
+    def prepare_command_and_user_data(self, entrance_command):
+        if isinstance(entrance_command, dict):
+            # Extract the first key, which is the username submitted
+            username = next(iter(entrance_command))
+            # print(f'prep_com_username = {username}')
+            # Based on this username, create a new dictionary with the command
+            new_command = entrance_command.pop(username)
+            # print(f'new_command = {new_command}')
+            return new_command, username
+
+    def use_command(self, entrance_command, permissions):
+        print(f'entrance_command = {entrance_command}')
+
+        self.new_command, self.username = self.prepare_command_and_user_data(entrance_command)
+        self.permissions = permissions
+
+        if isinstance(self.new_command, dict):
+            command = list(self.new_command.keys())[0]
+            data = self.new_command[command]
+        else:
+            command = self.new_command
+            data = None
+
+        if command in self.all_users_commands:
+            match command:
+                case "login":
+                    self.username = data[0]['username']
+                case "logout":
+                    data = self.username
+                case "help":
+                    data = self.permissions
+                case "msg-list":
+                    data = self.username
+                case "msg-del":
+                    data = {self.username: data}
+                case "msg-show":
+                    data = {self.username: data}
+                case "msg_count":
+                    data = self.username
+                case _:
+                    pass
+
+            if data is not None:
+                result = self.all_users_commands[command](data)
+            else:
+                result = self.all_users_commands[command]()
+
+        elif command in self.admin_commands:
+            if self.permissions == "admin":
+                if data is not None:
+                    result = self.admin_commands[command](data)
+                else:
+                    result = self.admin_commands[command]()
+            else:
+                result = server_response.E_COMMAND_UNAVAILABLE
+        else:
+            result = server_response.UNRECOGNISED_COMMAND
+
+        # print(f'Server response: {result}')
+        # print(f'EXIT USERNAME = {self.username}')
+        # print(f'EXIT PERMISSIONS: {self.permissions}')
+        # print(f'EXIT DATA = {data}')
+
+        return result
+
+
+
+
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/message_management.py 
+
+import server_package.server_response as server_response
+import server_package.server_data as server_data
+
+
+class MessageManagement:
+    def __init__(self, database_support):
+        self.database_support = database_support
+
+    @staticmethod
+    def msg_snd():
+        return {'Msg-snd': "OK"}
+
+    def new_message(self, data):
+        if not data:
+            return server_response.E_INVALID_DATA
+
+        recipient = data[2]
+        username = recipient["recipient"]
+
+        new_user_data = tuple(d[next(iter(d))] for d in data)
+
+        if not self.database_support.check_if_user_exist(username):
+            return server_response.E_USER_DOES_NOT_EXIST
+        elif self.database_support.inbox_msg_counting(username) == server_data.MAX_MSG_IN_INBOX:
+            return server_response.E_RECIPIENT_INBOX_IS_FULL
+        else:
+            self.database_support.add_new_message_to_db(new_user_data)
+            return server_response.MESSAGE_WAS_SENT
+
+    def msg_list(self, username):
+        if not username:
+            return server_response.E_INVALID_DATA
+
+        all_inbox_msgs = self.database_support.show_all_messages_inbox(username)
+        # all_inbox_msgs -> lista s³owników
+
+        msg_list_dict = {}
+        for index, row in enumerate(all_inbox_msgs, start=1):
+            message_id = row["message_id"]
+            sender_id = row["sender_id"]
+            date_value = row["date"]
+
+            # sprawdzamy czy obiekt date czy str
+            if hasattr(date_value, "strftime"):
+                formatted_date = date_value.strftime('%Y-%m-%d')
+            else:
+                formatted_date = date_value  # zak³adamy 'YYYY-MM-DD' lub None
+
+            msg_list_dict[index] = {
+                'message_id': message_id,
+                'sender': sender_id,
+                'date': formatted_date
+            }
+        return {"msg": msg_list_dict}
+
+    def msg_del(self, data):
+        if not data:
+            return server_response.E_INVALID_DATA
+        msg_id_to_del = self.choose_which_message(data)
+        if isinstance(msg_id_to_del, int):
+            self.database_support.delete_selected_message(int(msg_id_to_del))
+            return server_response.MESSAGE_WAS_DELETED
+        else:
+            return msg_id_to_del
+
+    def msg_show(self, data):
+        if not data:
+            return server_response.E_INVALID_DATA
+        msg_id_to_show = self.choose_which_message(data)
+        if isinstance(msg_id_to_show, int):
+            message_to_show = self.database_support.show_selected_message(msg_id_to_show)
+            if not message_to_show:
+                return server_response.E_MESSAGE_NOT_FOUND
+
+            date_value = message_to_show["date"]
+            if hasattr(date_value, "strftime"):
+                message_to_show["date"] = date_value.strftime('%Y-%m-%d')
+
+            return {"Message to show": message_to_show}
+        else:
+            return msg_id_to_show
+
+    def msg_count(self, username):
+        if not username:
+            return server_response.E_INVALID_DATA
+
+        inbox_msg_count = self.database_support.inbox_msg_counting(username)
+        if inbox_msg_count >= 5:
+            inbox_msg_count = str(inbox_msg_count) + server_response.YOUR_INBOX_IS_FULL
+        return {"msg-inbox-count": inbox_msg_count}
+
+    def convert_datetime_datetime_to_string_date(self, datetime_from_db):
+        if not datetime_from_db:
+            return None
+        if hasattr(datetime_from_db, "strftime"):
+            return datetime_from_db.strftime('%Y-%m-%d')
+        else:
+            # zak³adamy, ¿e to string
+            return datetime_from_db
+
+    def choose_which_message(self, data):
+        username = list(data.keys())[0]
+        msg_list_dict = self.msg_list(username)["msg"]
+        msg_num = list(data.values())[0]
+        if msg_num is None or int(msg_num) not in msg_list_dict.keys():
+            return server_response.E_MESSAGE_NOT_FOUND
+        else:
+            chosen_msg = msg_list_dict[int(msg_num)]["message_id"]
+            return chosen_msg
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/move_data_from_PostgreSQL_to_SQLite.py 
+
+import psycopg2
+import sqlite3
+
+# Œcie¿ka do istniej¹cej bazy SQLite (plik musi ju¿ istnieæ i zawieraæ odpowiednie tabele)
+db_path = r'E:\Programowanie\zaRaczke\Back-End\L003\Client_Server_System\db_files\db_CS_SQLite.db'
+
+# Ustawienia po³¹czenia z PostgreSQL (dostosuj do swoich danych)
+pg_config = {
+    'dbname': 'db_CS',
+    'user': 'postgres',
+    'password': 'MC',
+    'host': '127.0.0.1',  # np. 'localhost'
+    'port': 5432
+}
+
+
+def migrate_users(pg_cursor, sqlite_cursor):
+    """Migracja danych z tabeli users"""
+    pg_cursor.execute("SELECT user_id, user_name, permissions, status, activation_date, login_time FROM users")
+    rows = pg_cursor.fetchall()
+
+    insert_query = """
+        INSERT INTO users (user_id, user_name, permissions, status, activation_date, login_time)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """
+    for row in rows:
+        try:
+            sqlite_cursor.execute(insert_query, row)
+        except sqlite3.IntegrityError as e:
+            print(f"IntegrityError przy migracji rekordu users {row}: {e}")
+
+
+def migrate_messages(pg_cursor, sqlite_cursor):
+    """Migracja danych z tabeli messages"""
+    pg_cursor.execute("SELECT message_id, sender_id, date, recipient_id, content FROM messages")
+    rows = pg_cursor.fetchall()
+
+    insert_query = """
+        INSERT INTO messages (message_id, sender_id, date, recipient_id, content)
+        VALUES (?, ?, ?, ?, ?)
+    """
+    for row in rows:
+        try:
+            sqlite_cursor.execute(insert_query, row)
+        except sqlite3.IntegrityError as e:
+            print(f"IntegrityError przy migracji rekordu messages {row}: {e}")
+
+
+def migrate_passwords(pg_cursor, sqlite_cursor):
+    """Migracja danych z tabeli passwords"""
+    pg_cursor.execute("SELECT user_id, hashed_password, salt FROM passwords")
+    rows = pg_cursor.fetchall()
+
+    insert_query = """
+        INSERT INTO passwords (user_id, hashed_password, salt)
+        VALUES (?, ?, ?)
+    """
+    for row in rows:
+        try:
+            sqlite_cursor.execute(insert_query, row)
+        except sqlite3.IntegrityError as e:
+            print(f"IntegrityError przy migracji rekordu passwords {row}: {e}")
+
+
+def migrate_data():
+    # Po³¹czenie z PostgreSQL
+    try:
+        pg_conn = psycopg2.connect(**pg_config)
+        pg_cursor = pg_conn.cursor()
+    except Exception as e:
+        print("B³¹d po³¹czenia z PostgreSQL:", e)
+        return
+
+    # Po³¹czenie z ju¿ istniej¹c¹ baz¹ SQLite
+    try:
+        sqlite_conn = sqlite3.connect(db_path)
+        sqlite_cursor = sqlite_conn.cursor()
+    except Exception as e:
+        print("B³¹d po³¹czenia z SQLite:", e)
+        pg_cursor.close()
+        pg_conn.close()
+        return
+
+    try:
+        # Opcjonalnie: wyczyszczenie tabel w SQLite przed migracj¹ (o ile chcesz usun¹æ stare dane)
+        sqlite_cursor.execute("DELETE FROM users")
+        sqlite_cursor.execute("DELETE FROM messages")
+        sqlite_cursor.execute("DELETE FROM passwords")
+        sqlite_conn.commit()
+
+        # Migracja kolejno u¿ytkowników, wiadomoœci i hase³
+        migrate_users(pg_cursor, sqlite_cursor)
+        migrate_messages(pg_cursor, sqlite_cursor)
+        migrate_passwords(pg_cursor, sqlite_cursor)
+
+        sqlite_conn.commit()
+        print("Migracja danych zakoñczona pomyœlnie.")
+
+    except Exception as e:
+        print("B³¹d podczas migracji:", e)
+    finally:
+        # Zamkniêcie po³¹czeñ
+        pg_cursor.close()
+        pg_conn.close()
+        sqlite_conn.close()
+
+
+if __name__ == '__main__':
+    migrate_data()
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/server.py 
+
+import json
+import socket
+from server_package import server_data
+from server_package.menu import CommandHandler
+from server_package.functions import SystemUtilities
+from server_package.database_support import DatabaseSupport
+
+
+class Server:
+    def __init__(self, srv_host, srv_port, srv_buff):
+        self.srv_host = srv_host
+        self.srv_port = srv_port
+        self.srv_buff = srv_buff
+        self.handler = CommandHandler()
+        self.database_support = DatabaseSupport()
+
+    def server_connection(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((self.srv_host, self.srv_port))
+            s.listen()
+            print("Server started.")
+            while True:
+                conn, addr = s.accept()
+                SystemUtilities.clear_screen()
+                with conn:
+                    print(f"Connected by {addr}")
+                    received_data = conn.recv(self.srv_buff)
+                    # print(f'Server USER DATA = {received_data}')
+
+                    command = self.json_decode_received_data(received_data)
+                    username = self.get_username_from_received_data(command)
+                    user_data_db = self.get_user_data_from_db(username)
+
+                    result = self.handle_connection(command, user_data_db)
+                    conn.sendall(result.encode(server_data.ENCODE_FORMAT))
+
+                    if "Connection" in result:
+                        if json.loads(result)["Connection"] == server_data.CLOSE:
+                            print("Server stopped")
+                            break
+
+    def get_username_from_received_data(self, data):
+        username = next(iter(data))
+        return username
+
+    def get_user_data_from_db(self, username):
+        user_data_db = self.database_support.get_info_about_user(username)
+        return user_data_db
+
+    def handle_connection(self, command, user_data_db):
+        # print(f'USER_DATA_DB = {user_data_db}')
+        if user_data_db is not None:
+            permissions = user_data_db.get('permissions')
+        else:
+            permissions = None
+        # print(f'PERMISSIONS = {permissions}')
+        result = self.json_serialize_response(self.handler.use_command(command, permissions))
+        return result
+
+    @staticmethod
+    def json_decode_received_data(received_data):
+        decoded_data = json.loads(received_data)
+        if 'login' in decoded_data['command']:
+            # print(f"Command received from Client: login")
+            return decoded_data["command"]
+        else:
+            print(f"Command received from Client: {decoded_data['command']}")
+        return decoded_data["command"]
+
+    @staticmethod
+    def json_serialize_response(response):
+        return json.dumps(response)
+
+
+def start():
+    SystemUtilities.clear_screen()
+    server = Server(server_data.HOST, server_data.PORT, server_data.BUFFER_SIZE)
+    server.server_connection()
+
+
+if __name__ == '__main__':
+    start()
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/server_data.py 
+
+import os
+from datetime import datetime
+
+"""
+    Data for the Server part
+"""
+
+# ----------------------------------------------------
+
+HOST = "127.0.0.1"
+PORT = 65432
+BUFFER_SIZE = 1024
+ENCODE_FORMAT = "utf-8"
+
+
+# # czy w chwili wprowadzenia SQL poni¿sze linijki kodu bêd¹ potrzebne?
+# DB_FILES_DIRECTORY = os.path.join(os.path.dirname(__file__), '..', 'db_files')
+# USERS_DATABASE = os.path.join(DB_FILES_DIRECTORY, 'users.json')
+# MESSAGES_DATABASE = os.path.join(DB_FILES_DIRECTORY, 'messages.json')
+
+# ----------------------------------------------------
+
+CLOSE = "close"
+MAX_MSG_IN_INBOX = 5
+
+# ----------------------------------------------------
+
+START_TIME = datetime.now()
+DATE = datetime.now().strftime("%Y-%m-%d")
+VERSION = "0.3.0"
+
+# ----------------------------------------------------
+
+
+
+
+
+
+
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/server_response.py 
+
+# -------------- ERRORS RESPONSES -------------------
+E_RECIPIENT_DOES_NOT_EXIST = {"Error": "Recipient does not exist"}
+E_RECIPIENT_INBOX_IS_FULL = {"Error": "Recipient inbox is full"}
+E_MESSAGE_NOT_FOUND = {"Error": "Message not found."}
+E_ACCOUNT_EXIST = {"Error": "Account exists"}
+E_WRONG_PERMISSIONS = {"Error": "Wrong permissions"}
+E_USER_NAME_NOT_PROVIDED = {"Error": "Username not provided"}
+E_USER_DOES_NOT_EXIST = {"Error": "User does not exist"}
+E_USER_LOGGED_CANNOT_BE_DELETED = {"Error": "User logged cannot be deleted"}
+E_USER_LOGGED_CANNOT_CHANGE_PERMISSIONS = {"Error": "User logged, cannot change permissions"}
+E_USER_LOGGED_CANNOT_CHANGE_STATUS = {"Error": "User logged, cannot change status"}
+E_WRONG_STATUS = {"Error": "Wrong status"}
+E_USER_IS_BANNED = {"Error": "User is banned"}
+E_INVALID_CREDENTIALS = {"Error": "Invalid credentials. Try again"}
+E_UNABLE_TO_OPEN_DB_FILE = "Error: Unable to open db file."
+E_UNABLE_TO_SAVE_DB_FILE = "Error: Unable to save db file."
+E_FILE_IS_UNAVAILABLE = {"Error": "DB file is unavailable"}
+E_COMMAND_UNAVAILABLE = {"Error": "Command unavailable. No permissions"}
+E_INVALID_DATA = {"Error": "Invalid data."}
+E_DATABASE_ERROR = {"Error": "A database error occurred"}
+E_NEW_PASSWORD_ERROR = {"Error": "The confirmed password is incorrect."}
+
+# -------------- OTHERS RESPONSES -------------------
+MESSAGE_WAS_SENT = {"Message": "was sent"}
+MESSAGE_WAS_DELETED = {"Message": "was deleted"}
+NEW_ACCOUNT_CREATED = {"New account": "was created"}
+EXISTING_ACCOUNTS = "Existing_accounts"
+ACCOUNT_INFO = "Account_info"
+USER_DELETED = " - user was deleted"
+USER_PERMISSIONS_CHANGED = " - user permissions was changed"
+USER_STATUS_CHANGED = " - user status was changed"
+USER_PASSWORD_CHANGED = " - user password was changed"
+YOUR_INBOX_IS_FULL = " / Your Inbox is full"
+CONNECTION_CLOSE = {"Connection": "close"}
+UNRECOGNISED_COMMAND = {"Unrecognised command": "Please correct or type <help>."}
+
+
+# -------------- HELP RESPONSES -------------------
+
+HELP_DICT = {
+            "uptime": "returns the server's live time",
+            "info": "returns the version number of the server and the date it was created",
+            "help": "returns the list of available commands with short description",
+            "logout": "to log out the User",
+            "clear": " to clear the screen",
+            "msg-list": "to show content of inbox",
+            "msg-snd": " to create and send message",
+            "msg-del [number of message]": "to delete selected message",
+            "msg-show [number of message]": "to show details of message (from, date, content)",
+            "stop": "stops both the server and the client",
+            "user-add": "create an account",
+            "user-list": "shows the list of existing accounts",
+            "user-del [username]": "deletes the selected account",
+            "user-perm [username] [permission]": "change permissions [user] or [admin]",
+            "user-stat [username] [status]": "change user status [active] or [banned]",
+            "user-info [username]": "to show information about account of selected user",
+            "user-pass": "to change password"
+}
+ 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/user_authentication.py 
+
+import datetime
+import server_package.server_response as server_response
+from server_package.database_support import handle_database_errors
+from server_package.crypt_supprt import CryptoSupport
+
+
+class UserAuthentication:
+    def __init__(self, database_support):
+        self.crypto = CryptoSupport()
+        self.database_support = database_support
+
+    @handle_database_errors
+    def login(self, login_data):
+        # print(f'LOGIN_DATA = {login_data}')
+        if not login_data or not isinstance(login_data, list) or len(login_data) != 2:
+            return server_response.E_INVALID_DATA
+
+        login_username = login_data[0]['username']
+        login_password = login_data[1]['password']
+
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        user_data = self.database_support.get_info_about_user(login_username)
+        # print(f'USER_DATA_LOGIN = {user_data}')
+        password_is_OK = self.crypto.verifying_password(user_data['hashed_password'], login_password)
+        if user_data is not None and user_data['status'] == "active" and password_is_OK:
+            print(f'Access granted to {login_username}')
+            # self.database_support.data_update('users', 'login_time', login_username, 'NOW()')
+            self.database_support.data_update('users', 'login_time', login_username, current_time)
+            return {"Login": "OK", "login_username": login_username, "user_permissions": user_data['permissions']}
+
+        elif user_data is not None and user_data['status'] == "banned":
+            print(f'Access denied to {login_username}, user banned')
+            return server_response.E_USER_IS_BANNED
+        else:
+            print(f'Access denied to {login_username}, invalid credentials')
+            return server_response.E_INVALID_CREDENTIALS
+
+    @handle_database_errors
+    def logout(self, logged_in_user):
+        if not logged_in_user:
+            return server_response.E_INVALID_DATA
+
+        is_user_login = self.database_support.check_if_user_is_logged_in(logged_in_user)
+
+        if is_user_login:
+            self.database_support.data_update('users', 'login_time', logged_in_user, )
+            print(f'{logged_in_user} is logged out')
+            return {"Logout": "Successful"}
+        else:
+            pass 
+
+==================== 
+FILE: Client_Server_System_SQLite/server_package/user_management.py 
+
+import server_package.server_response as server_response
+from server_package.crypt_supprt import CryptoSupport
+
+
+class UserManagement:
+    def __init__(self, database_support):
+        self.crypto = CryptoSupport()
+        self.database_support = database_support
+
+    @staticmethod
+    def user_add():
+        return {"User-add": "OK"}
+
+    def create_account(self, data):
+        if not data:
+            return server_response.E_INVALID_DATA
+
+        new_user_data = list(d[next(iter(d))] for d in data)
+        if new_user_data:
+            username = new_user_data[0]
+            password = new_user_data.pop(1)
+            permissions = new_user_data[1]
+
+            password_data = self.crypto.password_hashing(password)
+
+        if len(username) > 0:
+            if self.database_support.check_if_user_exist(username):
+                return server_response.E_ACCOUNT_EXIST
+            if permissions not in ['user', 'admin']:
+                return server_response.E_WRONG_PERMISSIONS
+            else:
+                self.database_support.add_account_to_db(new_user_data, password_data)
+                return server_response.NEW_ACCOUNT_CREATED
+        else:
+            return server_response.E_USER_NAME_NOT_PROVIDED
+
+    def user_del(self, user_to_del):
+        if not self.database_support.check_if_user_exist(user_to_del):
+            return server_response.E_USER_DOES_NOT_EXIST
+        elif self.database_support.check_if_user_is_logged_in(user_to_del):
+            return server_response.E_USER_LOGGED_CANNOT_BE_DELETED
+        else:
+            self.database_support.delete_record_from_db('users', user_to_del)
+            return {user_to_del: server_response.USER_DELETED}
+
+    def user_list(self):
+        all_user_data = self.database_support.get_all_users_list()
+        users_dict = {}
+        for row in all_user_data:
+            user_name = row["user_name"]
+            permissions = row["permissions"]
+            status = row["status"]
+            users_dict[user_name] = {'permissions': permissions, 'status': status}
+        return {server_response.EXISTING_ACCOUNTS: users_dict}
+
+    def user_info(self, username):
+        if not self.database_support.check_if_user_exist(username):
+            return server_response.E_USER_DOES_NOT_EXIST
+
+        selected_user_data = self.database_support.get_info_about_user(username)
+        if not selected_user_data:
+            return server_response.E_DATABASE_ERROR
+
+        new_selected_user_data = {'user': selected_user_data.pop('user_name')}
+        new_selected_user_data.update(selected_user_data)
+
+        new_selected_user_data['activation_date'] = self.convert_datetime_datetime_to_string_date(new_selected_user_data['activation_date'])
+        del new_selected_user_data['hashed_password']
+        del new_selected_user_data['salt']
+
+        inbox_msg_count = self.database_support.inbox_msg_counting(username)
+        new_selected_user_data["inbox messages"] = inbox_msg_count
+        new_selected_user_data['login_time'] = self.convert_datetime_datetime_to_string_date(new_selected_user_data['login_time'])
+
+        return {server_response.ACCOUNT_INFO: new_selected_user_data}
+
+    def user_perm(self, data):
+        if not data:
+            return server_response.E_INVALID_DATA
+        user_to_change_permission, new_permissions = next(iter(data.items()))
+        if not self.database_support.check_if_user_exist(user_to_change_permission):
+            return server_response.E_USER_DOES_NOT_EXIST
+        elif self.database_support.check_if_user_is_logged_in(user_to_change_permission):
+            return server_response.E_USER_LOGGED_CANNOT_CHANGE_PERMISSIONS
+        elif new_permissions not in ['user', 'admin']:
+            return server_response.E_WRONG_PERMISSIONS
+        else:
+            self.database_support.data_update('users', 'permissions', user_to_change_permission, new_permissions)
+            return {user_to_change_permission: server_response.USER_PERMISSIONS_CHANGED}
+
+    def user_stat(self, data):
+        if not data:
+            return server_response.E_INVALID_DATA
+        user_to_change_status, new_status = next(iter(data.items()))
+        if not self.database_support.check_if_user_exist(user_to_change_status):
+            return server_response.E_USER_DOES_NOT_EXIST
+        elif self.database_support.check_if_user_is_logged_in(user_to_change_status):
+            return server_response.E_USER_LOGGED_CANNOT_CHANGE_STATUS
+        elif new_status not in ['banned', 'active']:
+            return server_response.E_WRONG_STATUS
+        else:
+            self.database_support.data_update('users', 'status', user_to_change_status, new_status)
+            return {user_to_change_status: server_response.USER_STATUS_CHANGED}
+
+    @staticmethod
+    def user_pass():
+        return {"User-pass": "OK"}
+
+    def change_password(self, data):
+        if not data:
+            return server_response.E_INVALID_DATA
+
+        data_to_change_password = list(d[next(iter(d))] for d in data)
+        if data_to_change_password:
+            user_to_change_password = data_to_change_password[0]
+            new_password = data_to_change_password.pop(1)
+            confirmed_new_password = data_to_change_password[1]
+
+        if len(user_to_change_password) > 0:
+            if self.database_support.check_if_user_exist(user_to_change_password):
+                if new_password == confirmed_new_password:
+                    hashed_password, salt = self.crypto.password_hashing(new_password)
+                    user_to_change_password_data = self.database_support.get_info_about_user(user_to_change_password)
+                    user_id = user_to_change_password_data['user_id']
+                    self.database_support.password_update('passwords', 'hashed_password', 'salt', user_id, hashed_password, salt)
+                    return {user_to_change_password: server_response.USER_PASSWORD_CHANGED}
+                else:
+                    return server_response.E_NEW_PASSWORD_ERROR
+            else:
+                return server_response.E_USER_DOES_NOT_EXIST
+        else:
+            return server_response.E_USER_NAME_NOT_PROVIDED
+
+    def convert_datetime_datetime_to_string_date(self, datetime_from_db):
+        if not datetime_from_db:
+            return None
+        if hasattr(datetime_from_db, "strftime"):
+            return datetime_from_db.strftime('%Y-%m-%d')
+        else:
+            return datetime_from_db
+ 
+

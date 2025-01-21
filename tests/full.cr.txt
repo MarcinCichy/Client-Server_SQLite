@@ -1,0 +1,977 @@
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/build_test_db.py 
+
+import os
+import time
+from tests.unit.test_config import test_get_db_config
+
+# Pobieramy konfiguracjê testow¹ jako s³ownik.
+config = test_get_db_config()
+engine = config.get("engine", "postgresql").lower()
+
+if engine == 'postgresql':
+    import psycopg2
+    from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+
+    temp_db_name = config['dbname']
+    default_db = 'postgres'
+
+
+    def create_temp_db():
+        try:
+            # £¹czymy siê do domyœlnej bazy, aby utworzyæ tymczasow¹ bazê
+            conn = psycopg2.connect(
+                dbname=default_db,
+                host=config['host'],
+                port=config['port'],
+                user=config['user'],
+                password=config['password']
+            )
+            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            cur = conn.cursor()
+            cur.execute(f"CREATE DATABASE {temp_db_name};")
+            cur.close()
+            conn.close()
+            time.sleep(2)
+            print(f"PostgreSQL: Database {temp_db_name} created successfully.")
+
+            # Tworzymy tabele w testowej bazie
+            conn_temp = psycopg2.connect(
+                dbname=temp_db_name,
+                host=config['host'],
+                port=config['port'],
+                user=config['user'],
+                password=config['password']
+            )
+            cur_temp = conn_temp.cursor()
+            cur_temp.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id serial PRIMARY KEY,
+                    user_name varchar(50) NOT NULL UNIQUE,
+                    permissions varchar(5) NOT NULL,
+                    status varchar(6) NOT NULL,
+                    activation_date date NOT NULL,
+                    login_time timestamp without time zone
+                );
+            """)
+            cur_temp.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    message_id serial PRIMARY KEY,
+                    sender_id varchar(50),
+                    date date NOT NULL,
+                    recipient_id varchar(50) REFERENCES users(user_name) ON DELETE CASCADE,
+                    content varchar(250)
+                );
+            """)
+            cur_temp.execute("""
+               CREATE TABLE IF NOT EXISTS passwords (
+                   user_id integer NOT NULL,
+                   hashed_password bytea NOT NULL,
+                   salt bytea NOT NULL,
+                   PRIMARY KEY (user_id),
+                   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+               );
+            """)
+            conn_temp.commit()
+            cur_temp.close()
+            conn_temp.close()
+            print("PostgreSQL: Testing database with tables was created.")
+        except Exception as e:
+            print(f"An error occurred while creating the PostgreSQL database: {e}")
+
+
+    def drop_temp_db():
+        try:
+            conn = psycopg2.connect(
+                dbname=default_db,
+                host=config['host'],
+                port=config['port'],
+                user=config['user'],
+                password=config['password']
+            )
+            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            cur = conn.cursor()
+            # Zabijamy wszystkie aktywne po³¹czenia z testow¹ baz¹
+            cur.execute(f"""
+                SELECT pg_terminate_backend(pg_stat_activity.pid)
+                FROM pg_stat_activity
+                WHERE pg_stat_activity.datname = '{temp_db_name}'
+                  AND pid <> pg_backend_pid();
+            """)
+            cur.execute(f"DROP DATABASE IF EXISTS {temp_db_name};")
+            cur.close()
+            conn.close()
+            print("PostgreSQL: Testing database was dropped.")
+            time.sleep(2)
+        except Exception as e:
+            print(f"An error occurred while dropping the PostgreSQL database: {e}")
+
+
+    def fill_temp_db():
+        try:
+            print("PostgreSQL: Test tables filling was started.")
+            conn = psycopg2.connect(
+                dbname=temp_db_name,
+                host=config['host'],
+                port=config['port'],
+                user=config['user'],
+                password=config['password']
+            )
+            cur = conn.cursor()
+
+            users_data = [
+                ("user1", "admin", "active", "2024-02-18"),
+                ("user2", "user", "banned", "2024-02-18"),
+                ("user3", "user", "active", "2024-02-18"),
+                ("user4", "admin", "active", "2024-02-18"),
+                ("user5", "user", "banned", "2024-02-18")
+            ]
+            import bcrypt
+            passwords = ["password1", "password2", "password3", "password4", "password5"]
+            for idx, user_data in enumerate(users_data):
+                cur.execute("""
+                    INSERT INTO users (user_name, permissions, status, activation_date)
+                    VALUES (%s, %s, %s, %s) RETURNING user_id
+                """, user_data)
+                user_id = cur.fetchone()[0]
+                password = passwords[idx].encode('utf-8')
+                hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+                cur.execute("""
+                    INSERT INTO passwords (user_id, hashed_password, salt)
+                    VALUES (%s, %s, %s)
+                """, (user_id, hashed_password, hashed_password[:29]))
+
+            messages_data = [
+                ("user1", "2024-02-18", "user1", "Hello, user2!"),
+                ("user2", "2024-02-18", "user2", "Hi there, user3!"),
+                ("user1", "2024-02-18", "user3", "Hey user4, how are you?"),
+                ("user4", "2024-02-18", "user1", "Greetings, user5!"),
+                ("user4", "2024-02-18", "user5", "Welcome, user1!"),
+                ("user2", "2024-02-18", "user1", "Hello, user2!"),
+                ("user3", "2024-02-18", "user1", "Hello, user2!"),
+                ("user5", "2024-02-18", "user1", "Hello, user2!")
+            ]
+            for message_data in messages_data:
+                cur.execute("""
+                    INSERT INTO messages (sender_id, date, recipient_id, content)
+                    VALUES (%s, %s, %s, %s)
+                """, message_data)
+
+            conn.commit()
+            cur.close()
+            conn.close()
+            print("PostgreSQL: Test tables filling was finished.")
+        except Exception as e:
+            print(f"An error occurred while filling the PostgreSQL database: {e}")
+
+elif engine == 'sqlite':
+    import sqlite3
+
+    db_path = r'E:\Programowanie\zaRaczke\Back-End\L011_SQLIte\Client_Server_System_SQLite\db_files\test_db_CS_SQLite.db'
+
+    # temp_db_file = config.get('db_path')
+    temp_db_file = db_path
+    # Upewnij siê, ¿e œcie¿ka jest absolutna
+    print(f"SQLite: Test database file: {temp_db_file}")
+    if not os.path.isabs(temp_db_file):
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        temp_db_file = os.path.join(base_dir, temp_db_file)
+    temp_db_name = temp_db_file  # Dla SQLite nazwa bazy to plik
+
+
+    def create_temp_db():
+        try:
+            if os.path.exists(temp_db_name):
+                os.remove(temp_db_name)
+            conn = sqlite3.connect(temp_db_name)
+            conn.row_factory = sqlite3.Row  # Umo¿liwia dostêp do wierszy jako s³owników
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id integer PRIMARY KEY AUTOINCREMENT,
+                    user_name text NOT NULL UNIQUE,
+                    permissions text NOT NULL,
+                    status text NOT NULL,
+                    activation_date date NOT NULL,
+                    login_time timestamp
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    message_id integer PRIMARY KEY AUTOINCREMENT,
+                    sender_id text,
+                    date date NOT NULL,
+                    recipient_id text,
+                    content text
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS passwords (
+                    user_id integer NOT NULL,
+                    hashed_password blob NOT NULL,
+                    salt blob NOT NULL,
+                    PRIMARY KEY (user_id),
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                );
+            """)
+            conn.commit()
+            cur.close()
+            conn.close()
+            print(f"SQLite: Test database created at {temp_db_name}")
+        except Exception as e:
+            print(f"An error occurred while creating the SQLite database: {e}")
+
+
+    def drop_temp_db():
+        try:
+            if os.path.exists(temp_db_name):
+                os.remove(temp_db_name)
+                print("SQLite: Test database dropped")
+        except Exception as e:
+            print(f"An error occurred while dropping the SQLite database: {e}")
+
+
+    def fill_temp_db():
+        try:
+            print("SQLite: Test tables filling was started")
+            conn = sqlite3.connect(temp_db_name)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            users_data = [
+                ("user1", "admin", "active", "2024-02-18"),
+                ("user2", "user", "banned", "2024-02-18"),
+                ("user3", "user", "active", "2024-02-18"),
+                ("user4", "admin", "active", "2024-02-18"),
+                ("user5", "user", "banned", "2024-02-18")
+            ]
+            import bcrypt
+            passwords = ["password1", "password2", "password3", "password4", "password5"]
+            for idx, user in enumerate(users_data):
+                cur.execute("""
+                    INSERT INTO users (user_name, permissions, status, activation_date)
+                    VALUES (?, ?, ?, ?)
+                """, user)
+                user_id = cur.lastrowid
+                print(f"SQLite: Inserted users: {user_id}")
+                # U¿ywamy wartoœci z listy passwords
+                password = passwords[idx].encode('utf-8')
+                hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+                cur.execute("""
+                    INSERT INTO passwords (user_id, hashed_password, salt)
+                    VALUES (?, ?, ?)
+                """, (user_id, hashed_password, hashed_password[:29]))
+            messages_data = [
+                ("user1", "2024-02-18", "user1", "Hello, user2!"),
+                ("user2", "2024-02-18", "user2", "Hi there, user3!"),
+                ("user1", "2024-02-18", "user3", "Hey user4, how are you?"),
+                ("user4", "2024-02-18", "user1", "Greetings, user5!"),
+                ("user4", "2024-02-18", "user5", "Welcome, user1!"),
+                ("user2", "2024-02-18", "user1", "Hello, user2!"),
+                ("user3", "2024-02-18", "user1", "Hello, user2!"),
+                ("user5", "2024-02-18", "user1", "Hello, user2!")
+            ]
+            for message in messages_data:
+                cur.execute("""
+                    INSERT INTO messages (sender_id, date, recipient_id, content)
+                    VALUES (?, ?, ?, ?)
+                """, message)
+            conn.commit()
+            cur.close()
+            conn.close()
+            print("SQLite: Test tables filling was finished")
+        except Exception as e:
+            print(f"An error occurred while filling the SQLite database: {e}")
+else:
+    raise ValueError(f"Unsupported engine: {engine}")
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_client.py 
+
+import os
+import json
+import unittest
+from client_package.client import Client
+import server_package.server_response as server_response
+import server_package.server_data as server_data
+
+
+class TestClientInitialization(unittest.TestCase):
+    def setUp(self):
+        self.test_host = "127.0.0.1"
+        self.test_port = 8000
+        self.test_buff = 1024
+        self.client = Client(self.test_host, self.test_port, self.test_buff)
+
+    def test_initialization(self):
+        self.assertEqual(self.client.srv_host, self.test_host)
+        self.assertEqual(self.client.srv_port, self.test_port)
+        self.assertEqual(self.client.srv_buff, self.test_buff)
+
+
+class TestClient(unittest.TestCase):
+    def setUp(self):
+        self.test_host = "127.0.0.1"
+        self.test_port = 65432
+        self.test_buff = 1024
+        self.client = Client(self.test_host, self.test_port, self.test_buff)
+
+    def dummy_connect_and_send(self, command):
+        return json.dumps({'Unrecognised command': 'Please correct or type <help>.'}).encode()
+
+    def test_handle_connection_unrecognised_command(self):
+        self.client.connect_and_send = self.dummy_connect_and_send
+        response = self.client.process_command({"command": "test"})
+        expected_result = server_response.UNRECOGNISED_COMMAND
+        self.assertEqual(response, expected_result)
+
+    def test_handle_connection_valid_command(self):
+        self.client.connect_and_send = lambda x: json.dumps({"response": "ok"}).encode()
+        response = self.client.process_command({"command": "test"})
+        self.assertEqual(response, {"response": "ok"})
+
+    def test_handle_no_connection_to_server(self):
+        self.client = Client("127.0.0.100", self.test_port, self.test_buff)
+        result = self.client.process_command({"command": "info"})
+        expected_result = {"Error": "Unable to connect to server"}
+        self.assertEqual(result, expected_result)
+
+
+class TestDataHandling(unittest.TestCase):
+    def test_json_decode_received_data(self):
+        test_data = json.dumps({"version": server_data.VERSION, "start_at": str(server_data.DATE)}).encode('utf-8')
+        decoded_data = Client.json_decode_received_data(test_data)
+        self.assertIn("version", decoded_data)
+
+    def test_json_serialize_command(self):
+        test_command = "test_command"
+        serialized_command = Client.json_serialize_command(test_command)
+        self.assertEqual(json.loads(serialized_command), {"command": test_command})
+
+    def test_json_serialize_response_Stop_Server(self):
+        test_response = {"Connection": "close"}
+        serialized_command = Client.json_serialize_command(test_response)
+        self.assertEqual(json.loads(serialized_command), {'command': test_response})
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_client_handlers.py 
+
+import os
+import unittest
+from client_package.windows.handlers import Handlers
+
+
+class TestClientHandlers(unittest.TestCase):
+    def test_prepare_command_empty(self):
+        self.assertEqual(Handlers.prepare_command("user", ""), {"user": None})
+
+    def test_prepare_command_without_data(self):
+        command = "help"
+        expected = {"user": "help"}
+        self.assertEqual(Handlers.prepare_command("user", command), expected)
+
+    def test_prepare_command_user_del(self):
+        command = "user-del to_delete_user"
+        expected = {"user": {"user-del": "to_delete_user"}}
+        self.assertEqual(Handlers.prepare_command("user", command), expected)
+
+    def test_prepare_command_user_del_without_name_of_user_to_delete(self):
+        command = "user-del"
+        expected = {"user": {"user-del": None}}
+        self.assertEqual(Handlers.prepare_command("user", command), expected)
+
+    def test_prepare_command_user_stat(self):
+        command = "user-stat anybody banned"
+        expected = {"user": {"user-stat": {"anybody": "banned"}}}
+        self.assertEqual(Handlers.prepare_command("user", command), expected)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_config.py 
+
+import os
+from configparser import ConfigParser
+
+
+def test_get_db_config(filename='test_database.ini'):
+    """
+    Zwraca konfiguracjê testow¹ jako s³ownik, np.:
+      {'engine': 'postgresql', 'host': '127.0.0.1', 'port': '5432', 'dbname': 'test_db_CS', 'user': 'postgres', 'password': 'MC'}
+      lub dla SQLite: {'engine': 'sqlite', 'db_path': 'db_files/test_db_CS_SQLite.db'}
+    """
+    parser = ConfigParser()
+    parser.read(filename)
+
+    if not parser.has_section('database'):
+        raise Exception(f"No [database] section found in {filename}")
+
+    engine = parser.get('database', 'engine', fallback='postgresql').lower()
+    config = {"engine": engine}
+
+    if engine == 'postgresql':
+        if not parser.has_section('postgresql'):
+            raise Exception(f"No [postgresql] section found in {filename}")
+        config.update(dict(parser.items('postgresql')))
+    elif engine == 'sqlite':
+        if not parser.has_section('sqlite'):
+            raise Exception(f"No [sqlite] section found in {filename}")
+        config.update(dict(parser.items('sqlite')))
+    else:
+        raise ValueError(f"Unsupported engine: {engine}")
+
+    return config
+
+
+def get_db_adapter():
+    """
+    Zwraca instancjê adaptera bazy danych na podstawie konfiguracji.
+    """
+    config = test_get_db_config()
+    engine = config['engine']
+    if engine == 'postgresql':
+        from server_package.db_adapter_postgres import PostgresDBAdapter
+        return PostgresDBAdapter(
+            host=config['host'],
+            port=config['port'],
+            dbname=config['dbname'],
+            user=config['user'],
+            password=config['password']
+        )
+    elif engine == 'sqlite':
+        from server_package.db_adapter_sqlite import SQLiteDBAdapter
+        db_path = config['db_path']
+        if not os.path.isabs(db_path):
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(base_dir, db_path)
+            print(f"DB_PATH = {db_path}")
+        return SQLiteDBAdapter(db_path=db_path)
+    else:
+        raise ValueError(f"Unsupported engine: {engine}")
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_functions.py 
+
+import os
+import unittest
+from unittest.mock import patch
+import server_package.server_data as server_data
+import server_package.server_response as server_response
+from server_package.functions import SystemUtilities
+from datetime import datetime, timedelta
+
+
+class TestSystemUtilities(unittest.TestCase):
+
+    def setUp(self):
+        self.util = SystemUtilities()
+
+    @patch("os.system")
+    @patch.object(os, "name", "nt")
+    def test_clear_screen_windows(self, mock_system):
+        self.util.clear_screen()
+        mock_system.assert_called_with("cls")
+
+    @patch("os.system")
+    @patch.object(os, "name", "posix")
+    def test_clear_screen_other_os(self, mock_system):
+        self.util.clear_screen()
+        mock_system.assert_called_with("clear")
+
+    def test_uptime(self):
+        mocked_time = datetime.now() - timedelta(hours=1, minutes=30)
+        with patch.object(server_data, "START_TIME", new=mocked_time):
+            result = self.util.uptime()
+            self.assertEqual(result["uptime"], "1:30:00")
+
+    def test_info(self):
+        with patch.object(server_data, "VERSION", "1.0.0"):
+            with patch.object(server_data, "DATE", "2023-01-01"):
+                result = self.util.info()
+                self.assertEqual(result, {"version": "1.0.0", "start_at": "2023-01-01"})
+
+    def test_help_user(self):
+        result = self.util.help(["user"])
+        self.assertIn("uptime", result)
+        self.assertIn("info", result)
+        self.assertIn("logout", result)
+        self.assertIn("msg-list", result)
+        self.assertNotIn("stop", result)
+        self.assertNotIn("user-add", result)
+        self.assertNotIn("user-list", result)
+
+    def test_help_admin(self):
+        result = self.util.help(["admin"])
+        self.assertIn("uptime", result)
+        self.assertIn("info", result)
+        self.assertIn("stop", result)
+        self.assertIn("user-add", result)
+        self.assertIn("user-list", result)
+
+    def test_help_invalid_permission(self):
+        result = self.util.help(["unknown"])
+        self.assertEqual(result, server_response.E_WRONG_PERMISSIONS)
+
+    def test_stop(self):
+        result = self.util.stop()
+        self.assertEqual(result, server_response.CONNECTION_CLOSE)
+
+    def test_clear(self):
+        result = self.util.clear()
+        self.assertEqual(result, {"Clear": ""})
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2) 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_menu.py 
+
+import os
+import unittest
+from server_package.menu import CommandHandler
+from server_package.functions import SystemUtilities
+import server_package.server_response as server_response
+
+os.environ['TEST_ENV'] = 'test'
+
+class TestMenu(unittest.TestCase):
+    def setUp(self):
+        self.system_utilities = SystemUtilities()
+        self.user_command_handler = CommandHandler()
+
+    def test_help_command_with_user_permissions(self):
+        user_data = {'marcin': {'login': [{'username': 'marcin'}, {'password': '12345'}]}}
+        # user_command_handler = CommandHandler()
+        self.user_command_handler.user_data = user_data
+        self.assertIn("uptime", self.user_command_handler.use_command({"marcin": "help"}, 'user'))
+
+    def test_help_command_with_admin_permissions(self):
+        admin_data = {'marcin': {'login': [{'username': 'marcin'}, {'password': '12345'}]}}
+        user_command_handler = CommandHandler()
+        user_command_handler.user_data = admin_data
+        self.assertIn("user-add", user_command_handler.use_command({'admin_user': 'help'}, 'admin'))
+
+    def test_help_command_with_unknown_permissions(self):
+        unknown_data = {'marcin': {'login': [{'username': 'marcin'}, {'password': '12345'}]}}
+        user_command_handler = CommandHandler()
+        user_command_handler.user_data = unknown_data
+        self.assertEqual(user_command_handler.use_command({'unknownusername': 'help'}, 'unkknown'), server_response.E_WRONG_PERMISSIONS)
+
+    def test_stop_command_with_user_permissions(self):
+        user_data = {'marcin': {'login': [{'username': 'marcin'}, {'password': '12345'}]}}
+        user_command_handler = CommandHandler()
+        user_command_handler.user_data = user_data
+        self.assertEqual(user_command_handler.use_command({"username": "stop"}, 'user'), server_response.E_COMMAND_UNAVAILABLE)
+
+    def test_stop_command_with_admin_permissions(self):
+        admin_data = {'marcin': {'login': [{'username': 'marcin'}, {'password': '12345'}, {'permissions': 'admin'}]}}
+        user_command_handler = CommandHandler()
+        user_command_handler.user_data = admin_data
+        self.assertEqual(user_command_handler.use_command({'admin_user': 'stop'}, 'admin'), {'Connection': 'close'})
+
+    def test_stop_command_with_unknown_permissions(self):
+        unknown_data = {'marcin': {'login': [{'username': 'marcin'}, {'password': '12345'}]}}
+        user_command_handler = CommandHandler()
+        user_command_handler.user_data = unknown_data
+        self.assertEqual(user_command_handler.use_command({'unknownusername': 'stop'}, 'unkknown'), server_response.E_COMMAND_UNAVAILABLE)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
+
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_message_management.py 
+
+import os
+import unittest
+from server_package.message_management import MessageManagement
+import server_package.server_response as server_response
+from server_package.database_support import DatabaseSupport
+import build_test_db
+
+# Ustawienie dla testów – np. SQLite
+os.environ['TEST_ENV'] = 'test'
+os.environ['TEST_ENGINE'] = 'postgresql'
+# os.environ['TEST_ENGINE'] = 'sqlite'
+
+
+class TestMessageManagement(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        build_test_db.drop_temp_db()
+        build_test_db.create_temp_db()
+        build_test_db.fill_temp_db()
+
+    @classmethod
+    def tearDownClass(cls):
+        build_test_db.drop_temp_db()
+
+    def setUp(self):
+        self.database_support = DatabaseSupport()
+        self.msg_mgmt = MessageManagement(self.database_support)
+
+    def test_new_message_valid_data(self):
+        sender = {'sender': 'user1'}
+        date = {'date': '2024-02-18'}
+        recipient = {'recipient': 'user3'}
+        content = {'content': 'MSG CONTENT'}
+        data = [sender, date, recipient, content]
+        response = self.msg_mgmt.new_message(data)
+        self.assertEqual(response, server_response.MESSAGE_WAS_SENT)
+
+    def test_new_message_invalid_data(self):
+        data = None
+        response = self.msg_mgmt.new_message(data)
+        self.assertEqual(response, server_response.E_INVALID_DATA)
+
+    def test_new_message_full_inbox(self):
+        sender = {'sender': 'user5'}
+        date = {'date': 'YYYY-MM-DD'}
+        recipient = {'recipient': 'user1'}
+        content = {'content': 'MSG CONTENT'}
+        data = [sender, date, recipient, content]
+
+        result = self.msg_mgmt.new_message(data)
+        self.assertEqual(result, server_response.E_RECIPIENT_INBOX_IS_FULL)
+
+    def test_msg_list_no_messages(self):
+        result = self.msg_mgmt.msg_list('NO_MSGS_USER')
+        self.assertEqual(result, {"msg": {}})
+
+    def test_msg_list_with_messages(self):
+        result = self.msg_mgmt.msg_list('user1')
+        self.assertNotEqual(result, {"msg": {}})
+
+    def test_msg_del_existing_message(self):
+        result = self.msg_mgmt.msg_del({'user3': '1'})
+        self.assertEqual(result, server_response.MESSAGE_WAS_DELETED)
+
+    def test_msg_del_non_existing_message(self):
+        result = self.msg_mgmt.msg_del({'RECIPIENT': '7'})
+        self.assertEqual(result, server_response.E_MESSAGE_NOT_FOUND)
+
+    def test_msg_show_existing(self):
+        result = self.msg_mgmt.msg_show({'user1': '2'})
+        self.assertEqual(result, {"Message to show": {'content': 'Greetings, user5!',
+                     'date': '2024-02-18',
+                     'message_id': 4,
+                     'recipient_id': 'user1',
+                     'sender_id': 'user4'}})
+
+    def test_msg_show_non_existing(self):
+        result = self.msg_mgmt.msg_show({'user2': '4'})
+        self.assertEqual(result, server_response.E_MESSAGE_NOT_FOUND)
+
+    def test_msg_count(self):
+        result = self.msg_mgmt.msg_count('user2')
+        self.assertEqual(result, {"msg-inbox-count": 1})
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_server.py 
+
+import os
+import json
+import unittest
+from server_package.server import Server
+import server_package.server_response as server_response
+
+os.environ['TEST_ENV'] = 'test'
+
+class TestServerInitialization(unittest.TestCase):
+    def setUp(self):
+        self.test_host = "127.0.0.1"
+        self.test_port = 8000
+        self.test_buff = 1024
+        self.server = Server(self.test_host, self.test_port, self.test_buff)
+
+    def test_initialization(self):
+        self.assertEqual(self.server.srv_host, self.test_host)
+        self.assertEqual(self.server.srv_port, self.test_port)
+        self.assertEqual(self.server.srv_buff, self.test_buff)
+
+
+class TestServer(unittest.TestCase):
+    def setUp(self):
+        self.test_host = "127.0.0.1"
+        self.test_port = 8000
+        self.test_buff = 1024
+        self.server = Server(self.test_host, self.test_port, self.test_buff)
+
+    def test_handle_connection_unrecognised_command(self):
+        test_data = {"command": {"RECIPIENT": "inforrr"}}
+        result = self.server.handle_connection(test_data, {"permissions": 'admin'})
+        result_dict = json.loads(result)
+        expected_result = server_response.UNRECOGNISED_COMMAND
+        self.assertEqual(result_dict, expected_result)
+
+    def test_handle_connection_correct_command(self):
+        test_data = {"RECIPIENT": "info"}
+        result = self.server.handle_connection(test_data, {"permissions": 'admin'})
+        result_dict = json.loads(result)
+        expected_result = "version"
+        self.assertIn(expected_result, result_dict)
+
+    def test_handle_connection_stop_command(self):
+        test_data = {"marcin": "stop"}
+        result = self.server.handle_connection(test_data, {"permissions": 'admin'})
+        result_dict = json.loads(result)
+        expected_result = {"Connection": "close"}
+        self.assertEqual(expected_result, result_dict)
+
+    def test_handle_connection_stop_command_invalid_permissions(self):
+        test_data = {"logged_username": "stop"}
+        result = self.server.handle_connection(test_data, {"permissions": 'user'})
+        result_dict = json.loads(result)
+        expected_result = server_response.E_COMMAND_UNAVAILABLE
+        self.assertEqual(expected_result, result_dict)
+
+
+class TestDataHandling(unittest.TestCase):
+    def test_json_decode_received_data(self):
+        test_data = json.dumps({"command": "test_command"}).encode('utf-8')
+        decoded_data = Server.json_decode_received_data(test_data)
+        self.assertEqual(decoded_data, "test_command")
+
+    def test_json_serialize_response(self):
+        test_response = {"status": "success"}
+        serialized_response = Server.json_serialize_response(test_response)
+        self.assertEqual(json.loads(serialized_response), test_response)
+
+    def test_json_serialize_response_Stop_Server(self):
+        test_response = {"Connection": "close"}
+        serialized_response = Server.json_serialize_response(test_response)
+        self.assertEqual(json.loads(serialized_response), test_response)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_user_authentication.py 
+
+# tests/unit/test_user_authentication.py
+
+import os
+import unittest
+from server_package.user_authentication import UserAuthentication
+import server_package.server_response as server_response
+from server_package.database_support import DatabaseSupport
+import build_test_db
+
+os.environ['TEST_ENV'] = 'test'
+# os.environ['TEST_ENGINE'] = 'sqlite'
+os.environ['TEST_ENGINE'] = 'postgresql'
+
+
+class TestUserAuthentication(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        # Tworzymy i wype³niamy bazê danych raz przed uruchomieniem testów
+        build_test_db.drop_temp_db()
+        build_test_db.create_temp_db()
+        build_test_db.fill_temp_db()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Usuwamy bazê danych po zakoñczeniu testów
+        build_test_db.drop_temp_db()
+
+    def setUp(self):
+        self.database_support = DatabaseSupport()
+        self.user_auth = UserAuthentication(self.database_support)
+
+    def test_login_user_no_login_data(self):
+        no_data = []
+        result = self.user_auth.login(no_data)
+        self.assertEqual(result, server_response.E_INVALID_DATA)
+
+    def test_login_user_valid_data(self):
+        valid_login_data = [{"username": "user1"}, {"password": "password1"}]
+        expected = {"Login": "OK", "login_username": "user1", "user_permissions": "admin"}
+        result = self.user_auth.login(valid_login_data)
+        self.assertEqual(result, expected)
+
+    def test_login_banned_user(self):
+        banned_user_data = [{"username": "user2"}, {"password": "password2"}]
+        expected = server_response.E_USER_IS_BANNED
+        result = self.user_auth.login(banned_user_data)
+        self.assertEqual(result, expected)
+
+    # Dodaj inne testy...
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
+ 
+
+==================== 
+FILE: E:/Programowanie/zaRaczke/Back-End/L011_SQLIte/Client_Server_System_SQLite/tests/unit/test_user_management.py 
+
+import os
+import unittest
+from server_package.user_management import UserManagement
+import server_package.server_response as server_response
+from server_package.database_support import DatabaseSupport
+from server_package.user_authentication import UserAuthentication
+import build_test_db
+
+os.environ['TEST_ENV'] = 'test'
+# os.environ['TEST_ENGINE'] = 'sqlite'
+os.environ['TEST_ENGINE'] = 'postgresql'
+
+
+class TestUserManagement(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        # Tworzymy i wype³niamy bazê danych raz przed uruchomieniem testów
+        build_test_db.drop_temp_db()
+        build_test_db.create_temp_db()
+        build_test_db.fill_temp_db()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Usuwamy bazê danych po zakoñczeniu testów
+        build_test_db.drop_temp_db()
+
+    def setUp(self):
+        self.database_support = DatabaseSupport()
+        self.usr_mgmt = UserManagement(self.database_support)
+        self.user_auth = UserAuthentication(self.database_support)
+
+    def test_user_list(self):
+        build_test_db.drop_temp_db()
+        build_test_db.create_temp_db()
+        build_test_db.fill_temp_db()
+        expected_result = {server_response.EXISTING_ACCOUNTS: {
+            "user1": {"permissions": "admin", "status": "active"},
+            "user2": {"permissions": "user", "status": "banned"},
+            "user3": {"permissions": "user", "status": "active"},
+            "user4": {"permissions": "admin", "status": "active"},
+            "user5": {"permissions": "user", "status": "banned"}
+            }
+        }
+        result = self.usr_mgmt.user_list()
+        self.assertEqual(result, expected_result)
+
+    def test_create_account_valid_data(self):
+        self.usr_mgmt.user_del("jakito")  # Usuñ u¿ytkownika, jeœli istnieje
+        new_account_data = [{'username': 'jakito'}, {'password': 'takion'}, {'permissions': 'user'}, {'status': 'active'}]
+        result = self.usr_mgmt.create_account(new_account_data)
+        self.assertEqual(result, server_response.NEW_ACCOUNT_CREATED)
+
+    def test_create_account_exist_data(self):
+        new_username = {'username': "user1"}
+        password = {'password': "new_username_password"}
+        permissions = {'permissions': "user"}
+        status = {'status': "active"}
+        activation_date = {'activation_date': '2023-01-01'}
+        data = [new_username, password, permissions, status, activation_date]
+
+        result = self.usr_mgmt.create_account(data)
+        self.assertEqual(result, server_response.E_ACCOUNT_EXIST)
+
+    def test_create_account_invalid_username_data(self):
+        new_username = {'username': ""}
+        password = {'password': "new_username_password"}
+        permissions = {'permissions': "user"}
+        status = {'status': "active"}
+        activation_date = {'activation_date': '2023-01-01'}
+        data = [new_username, password, permissions, status, activation_date]
+
+        result = self.usr_mgmt.create_account(data)
+        self.assertEqual(result, server_response.E_USER_NAME_NOT_PROVIDED)
+
+    def test_create_account_invalid_permissions_data(self):
+        new_username = {'username': "username2"}
+        password = {'password': "new_username_password"}
+        permissions = {'permissions': "superuser"}  # Nieprawid³owe uprawnienia
+        status = {'status': "active"}
+        activation_date = {'activation_date': '2023-01-01'}
+        data = [new_username, password, permissions, status, activation_date]
+
+        result = self.usr_mgmt.create_account(data)
+        self.assertEqual(result, server_response.E_WRONG_PERMISSIONS)
+
+    def test_delete_user_valid_data(self):
+        valid_user_to_del = "user4"
+        result = self.usr_mgmt.user_del(valid_user_to_del)
+        self.assertEqual(result, {valid_user_to_del: server_response.USER_DELETED})
+
+    def test_delete_user_invalid_data(self):
+        user_to_del = "user_100"
+        result = self.usr_mgmt.user_del(user_to_del)
+        self.assertEqual(result, server_response.E_USER_DOES_NOT_EXIST)
+
+    def test_delete_logged_user(self):
+        user_to_del = "user1"  # Zak³adam, ¿e 'user1' jest zalogowany
+        result = self.usr_mgmt.user_del(user_to_del)
+        self.assertEqual(result, server_response.E_USER_LOGGED_CANNOT_BE_DELETED)
+
+    def test_user_info_not_exist_user(self):
+        not_exist_user_info = "username2"
+        result = self.usr_mgmt.user_info(not_exist_user_info)
+        self.assertEqual(result, server_response.E_USER_DOES_NOT_EXIST)
+
+    def test_change_user_permissions_no_data(self):
+        data = []
+        result = self.usr_mgmt.user_perm(data)
+        self.assertEqual(result, server_response.E_INVALID_DATA)
+
+    def test_change_user_permissions_no_user_exist(self):
+        user_to_change_permission = 'username2'
+        permissions_to_change = 'admin'
+        data = {user_to_change_permission: permissions_to_change}
+        result = self.usr_mgmt.user_perm(data)
+        self.assertEqual(result, server_response.E_USER_DOES_NOT_EXIST)
+
+    def test_change_user_permissions_logged_user(self):
+        valid_login_data = [{"username": "user1"}, {"password": "password1"}]
+        self.user_auth.login(valid_login_data)
+        user_to_change_permission = 'user1'
+        permissions_to_change = 'user'
+        data = {user_to_change_permission: permissions_to_change}
+        result = self.usr_mgmt.user_perm(data)
+        self.assertEqual(result, server_response.E_USER_LOGGED_CANNOT_CHANGE_PERMISSIONS)
+
+    def test_change_user_permissions_wrong_new_permissions(self):
+        user_to_change_permission = 'user3'
+        permissions_to_change = 'other'
+        data = {user_to_change_permission: permissions_to_change}
+        result = self.usr_mgmt.user_perm(data)
+        self.assertEqual(result, server_response.E_WRONG_PERMISSIONS)
+
+    def test_change_user_permissions_valid_all_data(self):
+        user_to_change_permission = 'user4'
+        permissions_to_change = 'admin'
+        data = {user_to_change_permission: permissions_to_change}
+        result = self.usr_mgmt.user_perm(data)
+        self.assertEqual(result, {user_to_change_permission: server_response.USER_PERMISSIONS_CHANGED})
+
+
+
+    # Dodaj inne testy...
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
+ 
+
