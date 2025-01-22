@@ -110,6 +110,10 @@ After that, you can move data from PostgreSQL to SQLite, by using move_data_to_S
 * password = 12345
 
 
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+
 ## Version History
        
 

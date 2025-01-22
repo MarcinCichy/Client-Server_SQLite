@@ -82,7 +82,7 @@ def migrate_data():
         return
 
     try:
-        # Opcjonalnie: wyczyszczenie tabel w SQLite przed migracją (o ile chcesz usunąć stare dane)
+        # Opcjonalnie: wyczyszczenie tabel w SQLite przed migracją
         sqlite_cursor.execute("DELETE FROM users")
         sqlite_cursor.execute("DELETE FROM messages")
         sqlite_cursor.execute("DELETE FROM passwords")

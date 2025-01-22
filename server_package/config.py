@@ -25,8 +25,6 @@ def get_db_adapter():
     if not parser.has_section('database'):
         raise Exception(f"No [database] section found in {config_file}")
 
-    # Możesz też zdecydować, czy chcesz przyjmować silnik z konfiguracji, czy też wymuszać
-    # np. TEST_ENGINE na podstawie zmiennej środowiskowej.
     engine = os.getenv("TEST_ENGINE", parser.get('database', 'engine', fallback='postgresql'))
     print(f"ENGINE = {engine}")
 
@@ -48,8 +46,6 @@ def get_db_adapter():
         if not parser.has_section('sqlite'):
             raise Exception(f"No [sqlite] section found in {config_file}")
         db_path_relative = parser.get('sqlite', 'db_path')
-        # Jeśli chcesz, aby folder db_files pozostawał w głównym katalogu projektu,
-        # a plik config.py znajduje się w server_package, możesz zrobić tak:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         base_dir = os.path.dirname(current_dir)
         full_path = os.path.join(base_dir, db_path_relative)

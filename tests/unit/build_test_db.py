@@ -168,7 +168,6 @@ elif engine == 'sqlite':
 
     # temp_db_file = config.get('db_path')
     temp_db_file = db_path
-    # Upewnij się, że ścieżka jest absolutna
     print(f"SQLite: Test database file: {temp_db_file}")
     if not os.path.isabs(temp_db_file):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
